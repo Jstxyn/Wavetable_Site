@@ -56,7 +56,7 @@ def evaluate_equation(equation: str, t: np.ndarray, frame: float = 0):
     except Exception as e:
         raise ValueError(f"Error evaluating equation: {str(e)}")
 
-def generate_wav_file(frames, sample_rate=44100):
+def generate_wav_file(frames, sample_rate=44100, gain=1.0):
     """Generate a WAV file from wavetable frames."""
     num_frames = len(frames)
     frame_size = len(frames[0])
@@ -85,8 +85,10 @@ def generate_wav_file(frames, sample_rate=44100):
     
     # Write frame data
     for frame in frames:
-        # Convert float32 [-1, 1] to int16
-        samples = (np.array(frame) * 32767).astype(np.int16)
+        # Apply gain and convert float32 [-1, 1] to int16
+        # Clip to prevent overflow
+        samples = np.clip(np.array(frame) * gain, -1, 1) * 32767
+        samples = samples.astype(np.int16)
         buffer.write(samples.tobytes())
     
     # Set file size in header
@@ -107,15 +109,20 @@ def enhance_harmonics(waveform, strength):
     center_freq = len(spectrum) // 4  # Center frequency around 1/4 of Nyquist
     bandwidth = len(spectrum) // 8
     
-    # Create resonant peak
-    formant = np.exp(-((freqs - center_freq) ** 2) / (2 * bandwidth ** 2))
+    # Create resonant peak with smoother response
+    formant = np.exp(-0.5 * ((freqs - center_freq) / bandwidth) ** 2)
     
     # Add secondary formants for richer sound
-    formant2 = 0.5 * np.exp(-((freqs - center_freq * 2) ** 2) / (2 * (bandwidth * 1.5) ** 2))
-    formant3 = 0.25 * np.exp(-((freqs - center_freq * 3) ** 2) / (2 * (bandwidth * 2) ** 2))
+    formant2 = 0.5 * np.exp(-0.5 * ((freqs - center_freq * 2) / (bandwidth * 1.5)) ** 2)
+    formant3 = 0.25 * np.exp(-0.5 * ((freqs - center_freq * 3) / (bandwidth * 2)) ** 2)
     
-    # Combine formants
-    filter_response = 1 + strength * (formant + formant2 + formant3)
+    # Combine formants with smoother transition
+    filter_response = np.ones_like(freqs, dtype=float)
+    if strength > 0:
+        filter_response += strength * (formant + formant2 + formant3)
+    else:
+        # Invert effect for negative strength
+        filter_response = 1.0 / (1.0 - strength * (formant + formant2 + formant3))
     
     # Apply filter
     enhanced_spectrum = spectrum * filter_response
@@ -200,11 +207,12 @@ def download_waveform():
     try:
         data = request.get_json()
         frames = data.get('frames', [])
+        gain = float(data.get('gain', 1.0))
         
         if not frames:
             raise ValueError("No frame data provided")
         
-        wav_buffer = generate_wav_file(frames)
+        wav_buffer = generate_wav_file(frames, gain=gain)
         
         return send_file(
             wav_buffer,
@@ -216,27 +224,23 @@ def download_waveform():
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/waveform/enhance', methods=['POST'])
-def apply_enhancement():
-    """Apply harmonic enhancement to waveform frames."""
+def enhance_waveform():
+    """Enhance the harmonic content of a waveform."""
     try:
         data = request.get_json()
         frames = data.get('frames', [])
-        strength = float(data.get('strength', 0.5))
+        strength = float(data.get('strength', 0.0))
         
         if not frames:
             raise ValueError("No frame data provided")
         
-        enhanced_frames = [enhance_harmonics(np.array(frame), strength) for frame in frames]
+        # Process each frame
+        enhanced_frames = [enhance_harmonics(frame, strength) for frame in frames]
         
-        response = {
-            'waveform': enhanced_frames[0],
+        return jsonify({
             'frames': enhanced_frames,
-            'frame_size': len(enhanced_frames[0]),
-            'num_frames': len(enhanced_frames),
-            'spectrum': np.abs(np.fft.rfft(enhanced_frames[0])).tolist()
-        }
-        
-        return jsonify(response)
+            'waveform': enhanced_frames[0]  # Return first frame for display
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

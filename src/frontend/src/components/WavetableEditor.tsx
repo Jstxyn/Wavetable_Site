@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -11,33 +11,40 @@ interface WaveformData {
   frame_size: number;
   num_frames: number;
   type?: string;
+  equation?: string;
 }
 
-const WaveformMesh: React.FC<{ frames: number[][] }> = ({ frames }) => {
+interface WaveformMeshProps {
+  frames: number[][];
+  gain?: number;
+}
+
+const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
   const meshRef = useRef<THREE.LineSegments>(null);
   
-  useEffect(() => {
-    if (!meshRef.current || !frames.length) return;
-    
+  const geometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
     const numFrames = frames.length;
     const frameSize = frames[0].length;
     
-    const geometry = new THREE.BufferGeometry();
     const vertices = [];
     const colors = [];
     const color = new THREE.Color('#ff4d4d');
     
-    // Generate vertices for each frame as a continuous line
-    for (let i = 0; i < numFrames; i++) {
+    // Sample fewer frames for reduced line density
+    const frameStep = 3; // Skip every 3rd frame
+    const sampleStep = 3; // Skip every 3rd point in each frame
+    
+    for (let i = 0; i < numFrames; i += frameStep) {
       const frame = frames[i];
       const z = (i / (numFrames - 1)) * 2 - 1;
       
-      // Create line segments for this frame
-      for (let j = 0; j < frameSize - 1; j++) {
+      // Create line segments with reduced density
+      for (let j = 0; j < frameSize - sampleStep; j += sampleStep) {
         const x1 = (j / (frameSize - 1)) * 2 - 1;
-        const x2 = ((j + 1) / (frameSize - 1)) * 2 - 1;
-        const y1 = frame[j];
-        const y2 = frame[j + 1];
+        const x2 = ((j + sampleStep) / (frameSize - 1)) * 2 - 1;
+        const y1 = frame[j] * gain;
+        const y2 = frame[j + sampleStep] * gain;
         
         vertices.push(x1, y1, z);
         vertices.push(x2, y2, z);
@@ -50,14 +57,12 @@ const WaveformMesh: React.FC<{ frames: number[][] }> = ({ frames }) => {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
-    if (meshRef.current) {
-      meshRef.current.geometry = geometry;
-    }
-  }, [frames]);
-  
+    return geometry;
+  }, [frames, gain]);
+
   return (
-    <lineSegments ref={meshRef}>
-      <lineBasicMaterial vertexColors transparent opacity={0.8} />
+    <lineSegments ref={meshRef} geometry={geometry}>
+      <lineBasicMaterial color="#ff4d4d" transparent opacity={0.8} linewidth={3} />
     </lineSegments>
   );
 };
@@ -70,47 +75,60 @@ const WavetableEditor: React.FC = () => {
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [harmonicStrength, setHarmonicStrength] = useState<number>(0);
+  const [gain, setGain] = useState<number>(1.0);
+  const [isDraggingFormant, setIsDraggingFormant] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const harmonicTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastEnhanceTime = useRef<number>(0);
+  const originalWaveformRef = useRef<WaveformData | null>(null);
 
-  const drawWaveform = (canvas: HTMLCanvasElement, data: number[]) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx || !data.length) return;
+  // Store original waveform when it's first generated
+  useEffect(() => {
+    if (waveformData && (!originalWaveformRef.current || equation !== originalWaveformRef.current.equation)) {
+      originalWaveformRef.current = {
+        frames: [...waveformData.frames],
+        waveform: [...waveformData.waveform],
+        equation: equation // Store the equation that generated this waveform
+      };
+    }
+  }, [waveformData, equation]);
 
-    const width = canvas.width;
-    const height = canvas.height;
-    const centerY = height / 2;
-    const scaleY = height / 2.5;
-
-    ctx.clearRect(0, 0, width, height);
-    
-    // Draw center line
-    ctx.beginPath();
-    ctx.strokeStyle = '#404040';
-    ctx.lineWidth = 1;
-    ctx.moveTo(0, centerY);
-    ctx.lineTo(width, centerY);
-    ctx.stroke();
-
-    // Draw waveform
-    ctx.beginPath();
-    ctx.strokeStyle = '#ff4d4d';
-    ctx.lineWidth = 2;
-
-    data.forEach((y, i) => {
-      const x = (i / data.length) * width;
-      if (i === 0) {
-        ctx.moveTo(x, centerY + y * scaleY);
-      } else {
-        ctx.lineTo(x, centerY + y * scaleY);
-      }
+  // Simple preview of formant effect for immediate visual feedback
+  const previewFormantEffect = (frame: number[], strength: number) => {
+    return frame.map(y => {
+      // Quick approximation of formant effect for preview
+      const effect = 1 + (strength * Math.sign(y) * Math.abs(y));
+      return y * effect;
     });
+  };
 
-    ctx.stroke();
+  const updateVisualPreview = (strength: number) => {
+    if (!waveformData || !originalWaveformRef.current) return;
+
+    // Apply quick preview effect to first frame for 2D view
+    const previewFrame = previewFormantEffect(originalWaveformRef.current.waveform, strength);
+    
+    // Update canvas with preview
+    if (canvasRef.current) {
+      drawWaveform(canvasRef.current, previewFrame);
+    }
+
+    // Create preview frames for 3D view
+    const previewFrames = originalWaveformRef.current.frames.map(frame => 
+      previewFormantEffect(frame, strength)
+    );
+
+    setWaveformData({
+      frames: previewFrames,
+      waveform: previewFrame
+    });
   };
 
   const generateWaveform = async () => {
     try {
+      setError(null);
       setActivePreset(null); // Clear active preset when generating from equation
+      
       const response = await fetch('http://localhost:8081/api/waveform/equation', {
         method: 'POST',
         headers: {
@@ -127,16 +145,104 @@ const WavetableEditor: React.FC = () => {
         throw new Error(errorData.error || 'Failed to generate waveform');
       }
 
-      const data: WaveformData = await response.json();
+      const data = await response.json();
+      
+      // Reset harmonic strength when generating new waveform
+      setHarmonicStrength(0);
+      
       setWaveformData(data);
-      setError(null);
-
       if (canvasRef.current) {
         drawWaveform(canvasRef.current, data.waveform);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     }
+  };
+
+  const enhanceHarmonics = async () => {
+    if (!waveformData || !originalWaveformRef.current) return;
+
+    const now = Date.now();
+    if (now - lastEnhanceTime.current < 100) return;
+    lastEnhanceTime.current = now;
+
+    try {
+      const response = await fetch('http://localhost:8081/api/waveform/enhance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          frames: originalWaveformRef.current.frames,
+          strength: harmonicStrength
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to enhance harmonics');
+      }
+
+      const enhancedData = await response.json();
+      setWaveformData({
+        frames: enhancedData.frames,
+        waveform: enhancedData.frames[0]
+      });
+
+      if (canvasRef.current) {
+        drawWaveform(canvasRef.current, enhancedData.frames[0]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while enhancing harmonics');
+    }
+  };
+
+  const drawWaveform = (canvas: HTMLCanvasElement, data: number[]) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !data.length) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerY = height / 2;
+    const scaleY = height / 4;
+
+    ctx.clearRect(0, 0, width, height);
+    
+    // Draw center line
+    ctx.beginPath();
+    ctx.strokeStyle = '#404040';
+    ctx.lineWidth = 1;
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(width, centerY);
+    ctx.stroke();
+
+    // Draw boundary lines at +1 and -1
+    ctx.beginPath();
+    ctx.strokeStyle = '#303030';
+    ctx.setLineDash([5, 5]);
+    ctx.moveTo(0, centerY - scaleY);
+    ctx.lineTo(width, centerY - scaleY);
+    ctx.moveTo(0, centerY + scaleY);
+    ctx.lineTo(width, centerY + scaleY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw waveform
+    ctx.beginPath();
+    ctx.strokeStyle = '#ff4d4d';
+    ctx.lineWidth = 2;
+
+    data.forEach((y, i) => {
+      const x = (i / data.length) * width;
+      const scaledY = y * gain;
+      if (i === 0) {
+        ctx.moveTo(x, centerY + scaledY * scaleY);
+      } else {
+        ctx.lineTo(x, centerY + scaledY * scaleY);
+      }
+    });
+
+    ctx.stroke();
   };
 
   const handleBasicWaveform = async (type: string) => {
@@ -189,7 +295,8 @@ const WavetableEditor: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          frames: waveformData.frames
+          frames: waveformData.frames,
+          gain: gain
         }),
       });
 
@@ -214,41 +321,6 @@ const WavetableEditor: React.FC = () => {
       document.body.removeChild(a);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while downloading');
-    }
-  };
-
-  const enhanceHarmonics = async () => {
-    if (!waveformData || !waveformData.frames) {
-      setError('No waveform data to enhance');
-      return;
-    }
-
-    try {
-      const response = await fetch('http://localhost:8081/api/waveform/enhance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          frames: waveformData.frames,
-          strength: harmonicStrength
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to enhance waveform');
-      }
-
-      const data: WaveformData = await response.json();
-      setWaveformData(data);
-      setError(null);
-
-      if (canvasRef.current) {
-        drawWaveform(canvasRef.current, data.waveform);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while enhancing');
     }
   };
 
@@ -378,7 +450,7 @@ const WavetableEditor: React.FC = () => {
                   <Canvas camera={{ position: [1, 1, 1], fov: 75 }}>
                     <ambientLight intensity={0.5} />
                     <pointLight position={[10, 10, 10]} />
-                    <WaveformMesh frames={waveformData.frames} />
+                    <WaveformMesh frames={waveformData.frames} gain={gain} />
                     <OrbitControls />
                     <gridHelper args={[2, 20, '#404040', '#303030']} />
                   </Canvas>
@@ -396,14 +468,51 @@ const WavetableEditor: React.FC = () => {
                     type="range"
                     min="-1"
                     max="1"
-                    step="0.1"
+                    step="0.01"
                     value={harmonicStrength}
-                    onChange={(e) => {
-                      setHarmonicStrength(parseFloat(e.target.value));
+                    onMouseDown={() => setIsDraggingFormant(true)}
+                    onMouseUp={() => {
+                      setIsDraggingFormant(false);
                       enhanceHarmonics();
                     }}
+                    onChange={(e) => {
+                      const newStrength = parseFloat(e.target.value);
+                      setHarmonicStrength(newStrength);
+                      
+                      // Immediate visual preview
+                      updateVisualPreview(newStrength);
+                      
+                      // Debounced actual processing
+                      if (harmonicTimeoutRef.current) {
+                        clearTimeout(harmonicTimeoutRef.current);
+                      }
+                      harmonicTimeoutRef.current = setTimeout(() => {
+                        if (!isDraggingFormant) {
+                          enhanceHarmonics();
+                        }
+                      }, 100);
+                    }}
                   />
-                  <span>{harmonicStrength.toFixed(1)}</span>
+                  <span>{harmonicStrength.toFixed(2)}</span>
+                </label>
+                <label htmlFor="gain">
+                  Gain:
+                  <input
+                    id="gain"
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.01"
+                    value={gain}
+                    onChange={(e) => {
+                      const newGain = parseFloat(e.target.value);
+                      setGain(newGain);
+                      if (canvasRef.current && waveformData) {
+                        drawWaveform(canvasRef.current, waveformData.waveform);
+                      }
+                    }}
+                  />
+                  <span>{gain.toFixed(2)}</span>
                 </label>
               </div>
             </div>
