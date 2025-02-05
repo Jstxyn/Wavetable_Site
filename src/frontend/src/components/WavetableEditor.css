@@ -1,0 +1,175 @@
+.wavetable-editor {
+  padding: 2rem;
+  background: var(--background);
+  min-height: 100vh;
+  color: var(--text);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.editor-header {
+  margin-bottom: 2rem;
+}
+
+.editor-header h2 {
+  color: var(--text-bright);
+  margin-bottom: 0.5rem;
+}
+
+.description {
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.editor-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-group label {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+.input-group input {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: monospace;
+}
+
+.generate-btn {
+  padding: 0.5rem 1rem;
+  height: 36px;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: var(--text-bright);
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.generate-btn:hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+.control-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.basic-waveforms {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.basic-waveforms button {
+  padding: 0.5rem 1rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.basic-waveforms button:hover {
+  background: color-mix(in srgb, var(--surface) 85%, white);
+  border-color: color-mix(in srgb, var(--border) 85%, white);
+}
+
+.basic-waveforms button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-bright);
+}
+
+.basic-waveforms button.active:hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+  border-color: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+.frame-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.frame-control label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+}
+
+.frame-control input {
+  width: 80px;
+  padding: 0.5rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.error {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  border: 1px solid var(--error);
+  border-radius: 4px;
+  color: var(--error);
+}
+
+.visualization {
+  display: grid;
+  gap: 2rem;
+}
+
+.waveform-view,
+.wavetable-3d-view {
+  background: var(--surface);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.waveform-view h3,
+.wavetable-3d-view h3 {
+  color: var(--text-bright);
+  margin-bottom: 1rem;
+}
+
+.waveform-view canvas {
+  width: 100%;
+  height: 200px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.canvas-container {
+  width: 100%;
+  height: 400px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
