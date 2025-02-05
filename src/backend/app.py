@@ -97,6 +97,38 @@ def generate_wav_file(frames, sample_rate=44100):
     buffer.seek(0)
     return buffer
 
+def enhance_harmonics(waveform, strength):
+    """Enhance harmonics with formant-like filtering."""
+    # Convert to frequency domain
+    spectrum = np.fft.rfft(waveform)
+    freqs = np.arange(len(spectrum))
+    
+    # Create formant-like filter
+    center_freq = len(spectrum) // 4  # Center frequency around 1/4 of Nyquist
+    bandwidth = len(spectrum) // 8
+    
+    # Create resonant peak
+    formant = np.exp(-((freqs - center_freq) ** 2) / (2 * bandwidth ** 2))
+    
+    # Add secondary formants for richer sound
+    formant2 = 0.5 * np.exp(-((freqs - center_freq * 2) ** 2) / (2 * (bandwidth * 1.5) ** 2))
+    formant3 = 0.25 * np.exp(-((freqs - center_freq * 3) ** 2) / (2 * (bandwidth * 2) ** 2))
+    
+    # Combine formants
+    filter_response = 1 + strength * (formant + formant2 + formant3)
+    
+    # Apply filter
+    enhanced_spectrum = spectrum * filter_response
+    
+    # Convert back to time domain
+    enhanced_waveform = np.fft.irfft(enhanced_spectrum)
+    
+    # Normalize
+    if np.any(enhanced_waveform):
+        enhanced_waveform = enhanced_waveform / np.max(np.abs(enhanced_waveform))
+    
+    return enhanced_waveform.tolist()
+
 @app.route('/api/waveform/equation', methods=['POST'])
 def generate_from_equation():
     """Generate wavetable from equation."""
@@ -180,6 +212,31 @@ def download_waveform():
             as_attachment=True,
             download_name='wavetable.wav'
         )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/waveform/enhance', methods=['POST'])
+def apply_enhancement():
+    """Apply harmonic enhancement to waveform frames."""
+    try:
+        data = request.get_json()
+        frames = data.get('frames', [])
+        strength = float(data.get('strength', 0.5))
+        
+        if not frames:
+            raise ValueError("No frame data provided")
+        
+        enhanced_frames = [enhance_harmonics(np.array(frame), strength) for frame in frames]
+        
+        response = {
+            'waveform': enhanced_frames[0],
+            'frames': enhanced_frames,
+            'frame_size': len(enhanced_frames[0]),
+            'num_frames': len(enhanced_frames),
+            'spectrum': np.abs(np.fft.rfft(enhanced_frames[0])).tolist()
+        }
+        
+        return jsonify(response)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

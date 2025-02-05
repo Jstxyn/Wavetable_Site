@@ -1,0 +1,177 @@
+# Wavetable Equations Library
+# Use 't' for time (0 to 1) and 'frame' for morphing (0 to 1)
+
+### BASIC WAVEFORMS ###
+sin(t)                                              # Sine
+sign(sin(t))                                        # Square
+2 * (t - 0.5)                                       # Sawtooth
+2 * abs(2 * (t - 0.5)) - 1                         # Triangle
+sin(t) * (1-frame) + ((2 * t - 1) * frame)         # Sine to Saw morph
+
+### PLUCKS AND STRINGS ###
+# Violin-like
+(sin(t) + 0.5*sin(2*t) + 0.25*sin(3*t)) * exp(-3*frame)
+# Metallic pluck
+(sin(t) + 0.6*sin(3*t) + 0.4*sin(5*t)) * exp(-5*frame)
+# Soft pluck
+(sin(t) + 0.3*sin(2*t) + 0.15*sin(3*t)) * exp(-2*frame)
+# Harp-like
+(sin(t) + 0.2*sin(3*t) + 0.1*sin(5*t)) * exp(-4*frame)
+# Guitar string
+(sin(t) + 0.5*sin(2*t) + 0.33*sin(3*t) + 0.25*sin(4*t)) * exp(-3*frame)
+# Piano-like
+(sin(t) + 0.4*sin(2*t) + 0.2*sin(3*t) + 0.1*sin(4*t)) * (1 - 0.7*frame)
+
+### BASS SOUNDS ###
+# Deep sub
+sin(t/2)
+# Rich bass
+sin(t) + 0.5*sin(2*t) * (1-frame)
+# Growl bass
+sin(t) + 0.5*sin(2*t) * sin(4*pi*frame)
+# FM bass
+sin(t + 2*sin(2*t)*exp(-2*frame))
+# Square bass
+sign(sin(t)) * (1-frame) + sin(t) * frame
+# Acid bass
+sin(t + 3*sin(2*t)*(1-frame))
+
+### PADS AND ATMOSPHERES ###
+# Evolving pad
+sin(t + sin(t*2)*frame)
+# Choir-like
+sin(t) + 0.3*sin(2*t+0.1) + 0.2*sin(3*t+0.2) + 0.1*sin(4*t+0.3)
+# Airy texture
+sin(t + 0.5*sin(3*t)*frame) * (1 + 0.2*sin(10*frame))
+# Shimmer
+sin(t) + 0.5*sin(2*t + frame) + 0.25*sin(4*t + 2*frame)
+# Crystal pad
+sin(t*2) * sin(pi*frame) + sin(t*3) * sin(2*pi*frame)
+# Ethereal
+sin(t + sin(t*3)*frame) * (1 + 0.3*sin(20*frame))
+
+### FM AND MODULATION ###
+# Simple FM
+sin(t + 2*sin(2*t))
+# Complex FM
+sin(t + 3*sin(2*t) + 2*sin(3*t)*frame)
+# Ring mod
+sin(t) * sin(2*t + frame)
+# Phase distortion
+sin(t + pi*frame*sin(2*t))
+# Frequency shift
+sin(t*(1 + frame))
+# Waveshaping
+sin(t + 2*sin(2*t)*frame + sin(3*t)*frame*frame)
+
+### EXPERIMENTAL ###
+# Fractal
+sin(10*t*sin(5*t*frame))
+# Chaos
+sin(t + tan(pi*frame*t))
+# Glitch
+sin(t * floor(10*frame + 1))
+# Digital artifact
+sin(t) * sign(sin(20*frame))
+# Granular
+sin(t * (1 + floor(5*frame))) * exp(-5*mod(t + frame, 0.2))
+# Bitcrush
+sign(sin(t * floor(10*frame + 2)))
+
+### HARMONIC SERIES ###
+# Odd harmonics
+sin(t) + sin(3*t)/3 + sin(5*t)/5 + sin(7*t)/7
+# Even harmonics
+sin(2*t)/2 + sin(4*t)/4 + sin(6*t)/6 + sin(8*t)/8
+# Full series
+sin(t) + sin(2*t)/2 + sin(3*t)/3 + sin(4*t)/4 + sin(5*t)/5
+# Inverse series
+sin(t) + sin(2*t)*frame + sin(3*t)*frame^2 + sin(4*t)*frame^3
+# Alternating series
+sin(t) - sin(2*t)/2 + sin(3*t)/3 - sin(4*t)/4
+# Geometric series
+sin(t) + sin(2*t)/2^frame + sin(4*t)/4^frame + sin(8*t)/8^frame
+
+### MORPHING WAVES ###
+# Sine to noise
+sin(t) * (1-frame) + sin(t*100)/100 * frame
+# Clean to dirty
+sin(t) * (1-frame) + sin(t + sin(10*t)) * frame
+# Soft to harsh
+sin(t) * (1-frame) + sign(sin(t)) * frame
+# Simple to complex
+sin(t) * (1-frame) + (sin(t) + sin(2*t) + sin(3*t))/3 * frame
+# Thin to fat
+sin(t) * (1-frame) + (sin(t) + sin(t*0.99) + sin(t*1.01))/3 * frame
+# Pure to rich
+sin(t) + frame * (sin(2*t)/2 + sin(3*t)/3 + sin(4*t)/4)
+
+### RHYTHMIC ###
+# Pulse train
+sin(t) * (1 + sin(8*pi*frame))/2
+# Tremolo
+sin(t) * (1 + sin(4*pi*frame))/2
+# Bouncing ball
+sin(t) * exp(-10*mod(frame + t, 0.25))
+# Stutter
+sin(t * (1 + floor(4*frame)))
+# Gate
+sin(t) * (sign(sin(4*pi*frame)) + 1)/2
+# Rhythm morph
+sin(t) * (1 + sin(2*pi*frame))/2 + sin(2*t) * (1 + sin(4*pi*frame))/2
+
+### PHYSICAL MODELING ###
+# String vibration
+sin(t) * exp(-2*frame) + sin(2*t) * exp(-4*frame)
+# Bell tone
+sin(t) + 0.5*sin(2.756*t) + 0.25*sin(5.404*t)
+# Drum hit
+sin(2*pi*t) * exp(-5*frame) + sin(3*pi*t) * exp(-7*frame)
+# Wind chime
+sin(10*t) * exp(-3*frame) + sin(15.2*t) * exp(-4*frame)
+# Membrane
+sin(t) * exp(-frame) + sin(1.72*t) * exp(-2*frame)
+# Resonator
+sin(t + sin(2*t)*exp(-3*frame))
+
+### SPECTRAL ###
+# Formant sweep
+sin(t + 2*sin((1+frame)*t))
+# Harmonic stretch
+sin(t) + sin(2*t*frame) + sin(3*t*frame^2)
+# Spectral tilt
+sin(t) + sin(2*t)/(1+frame) + sin(3*t)/(1+2*frame)
+# Comb filter
+sin(t) + sin(t + frame/10)
+# Phase vocoder
+sin(t + frame*sin(2*t)) + sin(2*t + frame*sin(3*t))
+# Spectral blur
+sin(t) + sin(t*0.99)*frame + sin(t*1.01)*frame
+
+### NOISE AND CHAOS ###
+# White noise approximation
+sin(100*t) + sin(199*t) + sin(383*t)
+# Pink noise approximation
+sin(t) + sin(2*t)/sqrt(2) + sin(4*t)/2 + sin(8*t)/sqrt(8)
+# Brownian motion
+sin(t * (1 + frame*sin(10*t)))
+# Strange attractor
+sin(t + sin(frame*10*t))
+# Chaos equation
+sin(t + 3.7*frame*sin(pi*t))
+# Random harmonics
+sin(t) + sin(floor(10*frame)*t)
+
+### COMPOSITE WAVES ###
+# Multi-oscillator
+sin(t) + sin(2*t + frame) + sin(3*t + frame*2)
+# Wave stacking
+sin(t) + sin(2*t)*0.5 + sin(4*t)*0.25
+# Frequency stack
+sin(t) + sin(t*2)*frame + sin(t*4)*frame^2
+# Phase stack
+sin(t) + sin(t + frame*pi/2) + sin(t + frame*pi)
+# Amplitude stack
+sin(t) + frame*sin(2*t) + frame^2*sin(3*t)
+# Modulation stack
+sin(t + sin(2*t)*frame + sin(3*t)*frame^2)

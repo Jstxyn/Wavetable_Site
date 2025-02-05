@@ -68,6 +68,8 @@ const WavetableEditor: React.FC = () => {
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [harmonicStrength, setHarmonicStrength] = useState<number>(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const drawWaveform = (canvas: HTMLCanvasElement, data: number[]) => {
@@ -215,6 +217,41 @@ const WavetableEditor: React.FC = () => {
     }
   };
 
+  const enhanceHarmonics = async () => {
+    if (!waveformData || !waveformData.frames) {
+      setError('No waveform data to enhance');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8081/api/waveform/enhance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          frames: waveformData.frames,
+          strength: harmonicStrength
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to enhance waveform');
+      }
+
+      const data: WaveformData = await response.json();
+      setWaveformData(data);
+      setError(null);
+
+      if (canvasRef.current) {
+        drawWaveform(canvasRef.current, data.waveform);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while enhancing');
+    }
+  };
+
   // Remove the auto-generate effect
   useEffect(() => {
     // Generate initial waveform
@@ -310,28 +347,67 @@ const WavetableEditor: React.FC = () => {
       {error && <div className="error">{error}</div>}
 
       <div className="visualization">
-        <div className="waveform-view">
-          <h3>2D Waveform View</h3>
-          <canvas
-            ref={canvasRef}
-            width={600}
-            height={200}
-          />
+        <div className="view-controls">
+          <button
+            onClick={() => setViewMode('2d')}
+            className={viewMode === '2d' ? 'active' : ''}
+          >
+            2D View
+          </button>
+          <button
+            onClick={() => setViewMode('3d')}
+            className={viewMode === '3d' ? 'active' : ''}
+          >
+            3D View
+          </button>
         </div>
 
         {waveformData && waveformData.frames && (
-          <div className="wavetable-3d-view">
-            <h3>3D Wavetable View</h3>
-            <div className="canvas-container">
-              <Canvas camera={{ position: [1, 1, 1], fov: 75 }}>
-                <ambientLight intensity={0.5} />
-                <pointLight position={[10, 10, 10]} />
-                <WaveformMesh frames={waveformData.frames} />
-                <OrbitControls />
-                <gridHelper args={[2, 20, '#404040', '#303030']} />
-              </Canvas>
+          <>
+            <div className="waveform-view">
+              {viewMode === '2d' ? (
+                <>
+                  <canvas
+                    ref={canvasRef}
+                    width={600}
+                    height={200}
+                  />
+                </>
+              ) : (
+                <div className="canvas-container">
+                  <Canvas camera={{ position: [1, 1, 1], fov: 75 }}>
+                    <ambientLight intensity={0.5} />
+                    <pointLight position={[10, 10, 10]} />
+                    <WaveformMesh frames={waveformData.frames} />
+                    <OrbitControls />
+                    <gridHelper args={[2, 20, '#404040', '#303030']} />
+                  </Canvas>
+                </div>
+              )}
             </div>
-          </div>
+
+            <div className="spectral-controls">
+              <h3>Spectral Effects</h3>
+              <div className="effect-group">
+                <label htmlFor="harmonic-strength">
+                  Formant Filter:
+                  <input
+                    id="harmonic-strength"
+                    type="range"
+                    min="-1"
+                    max="1"
+                    step="0.1"
+                    value={harmonicStrength}
+                    onChange={(e) => {
+                      setHarmonicStrength(parseFloat(e.target.value));
+                      enhanceHarmonics();
+                    }}
+                  />
+                  <span>{harmonicStrength.toFixed(1)}</span>
+                </label>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
