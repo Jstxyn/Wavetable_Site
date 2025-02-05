@@ -52,11 +52,6 @@ def evaluate_equation(equation: str, t: np.ndarray, frame: float = 0):
                 raise ValueError(f"Function '{name}' is not supported. Supported functions are: sin, cos, tan, abs, sign, exp, log, sqrt, tanh")
         
         result = eval(code, {"__builtins__": {}}, safe_dict)
-        
-        # Normalize to [-1, 1]
-        if np.any(result):
-            result = result / np.max(np.abs(result))
-            
         return result
     except Exception as e:
         raise ValueError(f"Error evaluating equation: {str(e)}")
@@ -113,18 +108,27 @@ def generate_from_equation():
         
         frames = []
         t = np.linspace(0, 1, frame_size, endpoint=False)
+        max_amplitude = 0
         
+        # First pass: generate all frames and find global max amplitude
         for i in range(num_frames):
             frame_value = i / (num_frames - 1) if num_frames > 1 else 0
             waveform = evaluate_equation(equation, t, frame_value)
-            frames.append(waveform.tolist())
+            frames.append(waveform)
+            max_amplitude = max(max_amplitude, np.max(np.abs(waveform)))
+        
+        # Second pass: normalize all frames by the global max amplitude
+        if max_amplitude > 0:
+            frames = [frame / max_amplitude for frame in frames]
+        
+        frames_list = [frame.tolist() for frame in frames]
         
         response = {
-            'waveform': frames[0],
-            'frames': frames,
+            'waveform': frames_list[0],
+            'frames': frames_list,
             'frame_size': frame_size,
             'num_frames': num_frames,
-            'spectrum': np.abs(np.fft.rfft(frames[0])).tolist()
+            'spectrum': np.abs(np.fft.rfft(frames_list[0])).tolist()
         }
         
         return jsonify(response)
@@ -139,27 +143,11 @@ def get_basic_waveform():
         frame_size = 2048
         num_frames = int(request.args.get('frames', '8'))
         
-        # Generate frames with slight variations
-        frames = []
+        # Generate the base waveform
         base_waveform = generate_basic_waveform(waveform_type, frame_size)
         
-        for i in range(num_frames):
-            frame_value = i / (num_frames - 1) if num_frames > 1 else 0
-            # Add some morphing to basic waveforms
-            if waveform_type == 'sine':
-                # Morph between sine and saw
-                morph = (1 - frame_value) * base_waveform + frame_value * generate_basic_waveform('sawtooth', frame_size)
-            elif waveform_type == 'square':
-                # Morph between square and triangle
-                morph = (1 - frame_value) * base_waveform + frame_value * generate_basic_waveform('triangle', frame_size)
-            elif waveform_type == 'sawtooth':
-                # Morph between saw and square
-                morph = (1 - frame_value) * base_waveform + frame_value * generate_basic_waveform('square', frame_size)
-            else:  # triangle
-                # Morph between triangle and sine
-                morph = (1 - frame_value) * base_waveform + frame_value * generate_basic_waveform('sine', frame_size)
-            
-            frames.append(morph.tolist())
+        # Create identical frames (no morphing)
+        frames = [base_waveform.tolist() for _ in range(num_frames)]
         
         response = {
             'waveform': frames[0],

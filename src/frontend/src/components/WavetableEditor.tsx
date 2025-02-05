@@ -139,7 +139,23 @@ const WavetableEditor: React.FC = () => {
 
   const handleBasicWaveform = async (type: string) => {
     try {
-      setActivePreset(type); // Set active preset
+      // Update both preset and equation
+      setActivePreset(type);
+      switch(type) {
+        case 'sine':
+          setEquation('sin(t)');
+          break;
+        case 'square':
+          setEquation('sign(sin(t))');
+          break;
+        case 'sawtooth':
+          setEquation('2 * (t - 0.5)');
+          break;
+        case 'triangle':
+          setEquation('2 * abs(2 * (t - 0.5)) - 1');
+          break;
+      }
+
       const response = await fetch(`http://localhost:8081/api/waveform/basic?type=${type}&frames=${numFrames}`);
       if (!response.ok) {
         const errorData = await response.json();
@@ -199,12 +215,11 @@ const WavetableEditor: React.FC = () => {
     }
   };
 
-  // Auto-generate waveform when equation changes
+  // Remove the auto-generate effect
   useEffect(() => {
-    if (!activePreset) {
-      generateWaveform();
-    }
-  }, [equation, activePreset]);
+    // Generate initial waveform
+    generateWaveform();
+  }, []); // Only run once on mount
 
   return (
     <div className="wavetable-editor">
