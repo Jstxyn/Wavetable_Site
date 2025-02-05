@@ -1,39 +1,80 @@
-# Advanced Wavetable Editor
+# Wavetable Editor
 
-A web-based tool for creating, editing, and manipulating wavetables through manual slice-by-slice editing and equation-based waveform generation.
+An advanced web-based wavetable editor for creating and manipulating wavetables for synthesizers.
 
-## Setup Instructions
+## Features
 
-1. Create and activate virtual environment:
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Unix/macOS
-# or
-.\venv\Scripts\activate  # On Windows
-```
+- **Interactive Waveform Editor**
+  - Real-time 2D waveform visualization
+  - 3D wavetable visualization with frame interpolation
+  - Custom equation support with advanced mathematical functions
+  - Basic waveform presets (sine, square, sawtooth, triangle)
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+- **Advanced Math Functions**
+  - Trigonometric functions: sin, cos, tan, tanh
+  - Basic math: abs, sign, exp, log, sqrt
+  - Variable support: 't' for time, 'frame' for morphing
 
-## Project Structure
+- **File Export**
+  - WAV file generation
+  - 16-bit PCM format
+  - 44.1kHz sample rate
+  - Compatible with major synthesizers
 
-```
-wavetable_ai/
-├── src/
-│   ├── frontend/     # React frontend code
-│   └── backend/      # Flask backend code
-├── static/           # Static assets
-├── templates/        # HTML templates
-├── requirements.txt  # Python dependencies
-└── README.md        # This file
-```
+## Getting Started
 
-## Features (In Development)
+1. Install dependencies:
+   ```bash
+   # Backend
+   cd src/backend
+   pip install -r requirements.txt
 
-- Manual Wavetable Editing
-- Equation-Based Editing
-- Real-Time Visualization
-- Frame Navigation & Morphing Preview
-- Export Functionality (.wav, .srmwt, .vitaltable)
+   # Frontend
+   cd src/frontend
+   npm install
+   ```
+
+2. Start the servers:
+   ```bash
+   # Backend (from src/backend)
+   python app.py
+
+   # Frontend (from src/frontend)
+   npm run dev
+   ```
+
+3. Open http://localhost:5173 in your browser
+
+## Example Equations
+
+Here are some example equations to try:
+
+1. Sine to Square Morph:
+   ```
+   sin(t) * (1-frame) + sign(sin(t)) * frame
+   ```
+
+2. Harmonic Series:
+   ```
+   sin(t) + 0.5*sin(2*t)*frame + 0.25*sin(4*t)*frame
+   ```
+
+3. FM Synthesis:
+   ```
+   sin(t + 5*sin(3*t)*frame)
+   ```
+
+4. Soft Clip Wave:
+   ```
+   tanh(sin(t) * (1 + 3*frame))
+   ```
+
+## Development
+
+The project is built with:
+- Frontend: React, TypeScript, Three.js
+- Backend: Flask, NumPy
+
+## License
+
+MIT License
