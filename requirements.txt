@@ -1,0 +1,8 @@
+flask>=2.0.0
+numpy>=1.21.0
+scipy>=1.7.0
+python-dotenv>=0.19.0
+flask-cors>=3.0.10
+soundfile>=0.10.3
+matplotlib>=3.4.0
+sympy>=1.8.0  # For equation parsing
