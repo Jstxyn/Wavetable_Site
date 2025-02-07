@@ -68,7 +68,8 @@ const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
 };
 
 const WavetableEditor: React.FC = () => {
-  const [equation, setEquation] = useState<string>('sin(t) * (1-frame) + ((2 * t - 1) * frame)');
+  // Change default equation to a simple sine wave instead of a morphing wave
+  const [equation, setEquation] = useState<string>('sin(t)');
   const [numFrames, setNumFrames] = useState<number>(256);
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,48 +87,69 @@ const WavetableEditor: React.FC = () => {
   useEffect(() => {
     if (waveformData && (!originalWaveformRef.current || equation !== originalWaveformRef.current.equation)) {
       originalWaveformRef.current = {
-        frames: [...waveformData.frames],
+        ...waveformData,
+        frames: waveformData.frames.map(frame => [...frame]),
         waveform: [...waveformData.waveform],
-        equation: equation // Store the equation that generated this waveform
+        equation: equation,
+        type: waveformData.type || 'custom'
       };
     }
   }, [waveformData, equation]);
 
+  useEffect(() => {
+    // Generate initial sine wave
+    handleBasicWaveform('sine');
+  }, []); // Only run once on mount
+
   // Simple preview of formant effect for immediate visual feedback
   const previewFormantEffect = (frame: number[], strength: number) => {
+    if (!frame || frame.length === 0) return frame;
+    
+    // Create a simple approximation that maintains the overall shape
     return frame.map(y => {
-      // Quick approximation of formant effect for preview
-      const effect = 1 + (strength * Math.sign(y) * Math.abs(y));
-      return y * effect;
+      const sign = Math.sign(y);
+      const abs = Math.abs(y);
+      
+      if (strength > 0) {
+        // Enhance peaks while preserving shape
+        return sign * (abs + strength * abs * (1 - abs));
+      } else {
+        // Reduce peaks while preserving shape
+        return sign * (abs + strength * abs * abs);
+      }
     });
   };
 
   const updateVisualPreview = (strength: number) => {
     if (!waveformData || !originalWaveformRef.current) return;
 
-    // Apply quick preview effect to first frame for 2D view
-    const previewFrame = previewFormantEffect(originalWaveformRef.current.waveform, strength);
-    
+    // Get the original frames
+    const originalFrames = originalWaveformRef.current.frames;
+    const originalWaveform = originalWaveformRef.current.waveform;
+
+    // Apply preview effect
+    const previewFrame = previewFormantEffect(originalWaveform, strength);
+    const previewFrames = originalFrames.map(frame => 
+      previewFormantEffect(frame, strength)
+    );
+
     // Update canvas with preview
     if (canvasRef.current) {
       drawWaveform(canvasRef.current, previewFrame);
     }
 
-    // Create preview frames for 3D view
-    const previewFrames = originalWaveformRef.current.frames.map(frame => 
-      previewFormantEffect(frame, strength)
-    );
-
-    setWaveformData({
+    // Update state while preserving all other properties
+    setWaveformData(prev => ({
+      ...prev,
       frames: previewFrames,
       waveform: previewFrame
-    });
+    }));
   };
 
   const generateWaveform = async () => {
     try {
       setError(null);
-      setActivePreset(null); // Clear active preset when generating from equation
+      setActivePreset(null); // Clear active preset when generating custom equation
       
       const response = await fetch('http://localhost:8081/api/waveform/equation', {
         method: 'POST',
@@ -150,7 +172,68 @@ const WavetableEditor: React.FC = () => {
       // Reset harmonic strength when generating new waveform
       setHarmonicStrength(0);
       
-      setWaveformData(data);
+      // Store the original data with equation
+      const newWaveformData = {
+        ...data,
+        type: 'custom',
+        equation: equation // Store the custom equation
+      };
+      
+      setWaveformData(newWaveformData);
+      originalWaveformRef.current = {
+        ...newWaveformData,
+        frames: newWaveformData.frames.map(frame => [...frame]),
+        waveform: [...newWaveformData.waveform]
+      };
+      
+      if (canvasRef.current) {
+        drawWaveform(canvasRef.current, data.waveform);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleBasicWaveform = async (type: string) => {
+    try {
+      setError(null);
+      // Update both preset and equation
+      setActivePreset(type);
+      
+      // Set the equation based on type
+      const equations = {
+        sine: 'sin(t)',
+        square: 'sign(sin(t))',
+        sawtooth: '2 * (t - 0.5)',
+        triangle: '2 * abs(2 * (t - 0.5)) - 1'
+      };
+      const newEquation = equations[type];
+      setEquation(newEquation);
+
+      const response = await fetch(`http://localhost:8081/api/waveform/basic?type=${type}&frames=${numFrames}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate basic waveform');
+      }
+
+      const data: WaveformData = await response.json();
+      // Reset harmonic strength when changing waveform
+      setHarmonicStrength(0);
+      
+      // Store the original data with equation
+      const newWaveformData = {
+        ...data,
+        type,
+        equation: newEquation
+      };
+      
+      setWaveformData(newWaveformData);
+      originalWaveformRef.current = {
+        ...newWaveformData,
+        frames: newWaveformData.frames.map(frame => [...frame]),
+        waveform: [...newWaveformData.waveform]
+      };
+      
       if (canvasRef.current) {
         drawWaveform(canvasRef.current, data.waveform);
       }
@@ -163,7 +246,7 @@ const WavetableEditor: React.FC = () => {
     if (!waveformData || !originalWaveformRef.current) return;
 
     const now = Date.now();
-    if (now - lastEnhanceTime.current < 100) return;
+    if (now - lastEnhanceTime.current < 50) return;
     lastEnhanceTime.current = now;
 
     try {
@@ -174,7 +257,8 @@ const WavetableEditor: React.FC = () => {
         },
         body: JSON.stringify({
           frames: originalWaveformRef.current.frames,
-          strength: harmonicStrength
+          strength: harmonicStrength,
+          type: originalWaveformRef.current.type
         }),
       });
 
@@ -184,13 +268,21 @@ const WavetableEditor: React.FC = () => {
       }
 
       const enhancedData = await response.json();
-      setWaveformData({
-        frames: enhancedData.frames,
-        waveform: enhancedData.frames[0]
-      });
+      
+      if (!isDraggingFormant) {
+        // Update waveform data while preserving type and equation
+        setWaveformData(prev => ({
+          ...prev,
+          frames: enhancedData.frames,
+          waveform: enhancedData.frames[0],
+          spectrum: enhancedData.spectrum || prev.spectrum,
+          type: originalWaveformRef.current?.type || prev.type,
+          equation: originalWaveformRef.current?.equation || prev.equation // Preserve the original equation
+        }));
 
-      if (canvasRef.current) {
-        drawWaveform(canvasRef.current, enhancedData.frames[0]);
+        if (canvasRef.current) {
+          drawWaveform(canvasRef.current, enhancedData.frames[0]);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while enhancing harmonics');
@@ -245,43 +337,6 @@ const WavetableEditor: React.FC = () => {
     ctx.stroke();
   };
 
-  const handleBasicWaveform = async (type: string) => {
-    try {
-      // Update both preset and equation
-      setActivePreset(type);
-      switch(type) {
-        case 'sine':
-          setEquation('sin(t)');
-          break;
-        case 'square':
-          setEquation('sign(sin(t))');
-          break;
-        case 'sawtooth':
-          setEquation('2 * (t - 0.5)');
-          break;
-        case 'triangle':
-          setEquation('2 * abs(2 * (t - 0.5)) - 1');
-          break;
-      }
-
-      const response = await fetch(`http://localhost:8081/api/waveform/basic?type=${type}&frames=${numFrames}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate basic waveform');
-      }
-
-      const data: WaveformData = await response.json();
-      setWaveformData(data);
-      setError(null);
-
-      if (canvasRef.current) {
-        drawWaveform(canvasRef.current, data.waveform);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
-  };
-
   const downloadWaveform = async () => {
     if (!waveformData || !waveformData.frames) {
       setError('No waveform data to download');
@@ -323,12 +378,6 @@ const WavetableEditor: React.FC = () => {
       setError(err instanceof Error ? err.message : 'An error occurred while downloading');
     }
   };
-
-  // Remove the auto-generate effect
-  useEffect(() => {
-    // Generate initial waveform
-    generateWaveform();
-  }, []); // Only run once on mount
 
   return (
     <div className="wavetable-editor">
@@ -473,24 +522,32 @@ const WavetableEditor: React.FC = () => {
                     onMouseDown={() => setIsDraggingFormant(true)}
                     onMouseUp={() => {
                       setIsDraggingFormant(false);
+                      // Force an enhance after drag ends
                       enhanceHarmonics();
+                    }}
+                    onMouseLeave={() => {
+                      if (isDraggingFormant) {
+                        setIsDraggingFormant(false);
+                        enhanceHarmonics();
+                      }
                     }}
                     onChange={(e) => {
                       const newStrength = parseFloat(e.target.value);
                       setHarmonicStrength(newStrength);
                       
-                      // Immediate visual preview
+                      // Always update preview immediately
                       updateVisualPreview(newStrength);
                       
-                      // Debounced actual processing
+                      // Only do actual processing if we're not dragging
                       if (harmonicTimeoutRef.current) {
                         clearTimeout(harmonicTimeoutRef.current);
                       }
-                      harmonicTimeoutRef.current = setTimeout(() => {
-                        if (!isDraggingFormant) {
+                      
+                      if (!isDraggingFormant) {
+                        harmonicTimeoutRef.current = setTimeout(() => {
                           enhanceHarmonics();
-                        }
-                      }, 100);
+                        }, 50); 
+                      }
                     }}
                   />
                   <span>{harmonicStrength.toFixed(2)}</span>

@@ -101,38 +101,69 @@ def generate_wav_file(frames, sample_rate=44100, gain=1.0):
 
 def enhance_harmonics(waveform, strength):
     """Enhance harmonics with formant-like filtering."""
-    # Convert to frequency domain
+    # Convert input to numpy array if it's a list
+    waveform = np.array(waveform)
+    
+    # Store original phase information
     spectrum = np.fft.rfft(waveform)
+    original_phases = np.angle(spectrum)
+    original_magnitudes = np.abs(spectrum)
     freqs = np.arange(len(spectrum))
     
-    # Create formant-like filter
-    center_freq = len(spectrum) // 4  # Center frequency around 1/4 of Nyquist
-    bandwidth = len(spectrum) // 8
+    # Create formant-like filter with gentler effect
+    center_freq = len(spectrum) // 4
+    bandwidth = len(spectrum) // 6  # Slightly narrower bandwidth
     
-    # Create resonant peak with smoother response
+    # Create resonant peaks with more controlled amplitudes
     formant = np.exp(-0.5 * ((freqs - center_freq) / bandwidth) ** 2)
+    formant2 = 0.3 * np.exp(-0.5 * ((freqs - center_freq * 2) / (bandwidth * 1.5)) ** 2)
+    formant3 = 0.15 * np.exp(-0.5 * ((freqs - center_freq * 3) / (bandwidth * 2)) ** 2)
     
-    # Add secondary formants for richer sound
-    formant2 = 0.5 * np.exp(-0.5 * ((freqs - center_freq * 2) / (bandwidth * 1.5)) ** 2)
-    formant3 = 0.25 * np.exp(-0.5 * ((freqs - center_freq * 3) / (bandwidth * 2)) ** 2)
-    
-    # Combine formants with smoother transition
+    # Create a more subtle filter response
     filter_response = np.ones_like(freqs, dtype=float)
     if strength > 0:
-        filter_response += strength * (formant + formant2 + formant3)
+        # More controlled additive enhancement
+        filter_response = 1.0 + (strength * 0.25 * (formant + formant2 + formant3))
     else:
-        # Invert effect for negative strength
-        filter_response = 1.0 / (1.0 - strength * (formant + formant2 + formant3))
+        # More controlled subtractive enhancement
+        filter_response = 1.0 + (strength * 0.15 * (formant + formant2 + formant3))
     
-    # Apply filter
-    enhanced_spectrum = spectrum * filter_response
+    # Ensure filter response stays very close to 1.0 for low frequencies
+    low_freq_mask = freqs < (len(spectrum) // 16)
+    filter_response[low_freq_mask] = 1.0 + (filter_response[low_freq_mask] - 1.0) * 0.1
+    
+    # Clip the filter response to prevent extreme changes
+    filter_response = np.clip(filter_response, 0.25, 4.0)
+    
+    # Apply filter to magnitudes while preserving phases
+    enhanced_magnitudes = original_magnitudes * filter_response
+    
+    # Ensure we preserve the fundamental frequency
+    enhanced_magnitudes[1:4] = original_magnitudes[1:4]
+    
+    # Reconstruct spectrum using original phases
+    enhanced_spectrum = enhanced_magnitudes * np.exp(1j * original_phases)
+    
+    # Preserve DC component exactly
+    enhanced_spectrum[0] = spectrum[0]
     
     # Convert back to time domain
     enhanced_waveform = np.fft.irfft(enhanced_spectrum)
     
-    # Normalize
-    if np.any(enhanced_waveform):
-        enhanced_waveform = enhanced_waveform / np.max(np.abs(enhanced_waveform))
+    # Scale the waveform while preserving shape
+    max_abs = np.max(np.abs(enhanced_waveform))
+    if max_abs > 0:
+        # First normalize
+        enhanced_waveform = enhanced_waveform / max_abs
+        
+        # Then scale to match original amplitude
+        original_max = np.max(np.abs(waveform))
+        if original_max > 0:
+            enhanced_waveform *= original_max
+            
+        # Blend with original to maintain character
+        blend_factor = abs(strength) * 0.5  # More conservative blending
+        enhanced_waveform = (1 - blend_factor) * waveform + blend_factor * enhanced_waveform
     
     return enhanced_waveform.tolist()
 
@@ -179,14 +210,14 @@ def get_basic_waveform():
     """Generate basic waveform."""
     try:
         waveform_type = request.args.get('type', 'sine')
+        num_frames = int(request.args.get('frames', 8))
         frame_size = 2048
-        num_frames = int(request.args.get('frames', '8'))
         
-        # Generate the base waveform
-        base_waveform = generate_basic_waveform(waveform_type, frame_size)
+        # Generate the basic waveform
+        waveform = generate_basic_waveform(waveform_type, frame_size)
         
-        # Create identical frames (no morphing)
-        frames = [base_waveform.tolist() for _ in range(num_frames)]
+        # For basic waveforms, use the same waveform for all frames
+        frames = [waveform.tolist() for _ in range(num_frames)]
         
         response = {
             'waveform': frames[0],
@@ -230,6 +261,7 @@ def enhance_waveform():
         data = request.get_json()
         frames = data.get('frames', [])
         strength = float(data.get('strength', 0.0))
+        waveform_type = data.get('type')
         
         if not frames:
             raise ValueError("No frame data provided")
@@ -237,9 +269,17 @@ def enhance_waveform():
         # Process each frame
         enhanced_frames = [enhance_harmonics(frame, strength) for frame in frames]
         
+        # For basic waveforms, ensure we maintain their characteristics
+        if waveform_type in ['sine', 'square', 'sawtooth', 'triangle']:
+            # Calculate the average frame
+            avg_frame = np.mean(enhanced_frames, axis=0)
+            # Use this as the base for all frames to prevent morphing
+            enhanced_frames = [avg_frame.tolist() for _ in range(len(frames))]
+        
         return jsonify({
             'frames': enhanced_frames,
-            'waveform': enhanced_frames[0]  # Return first frame for display
+            'waveform': enhanced_frames[0],  # Return first frame for display
+            'spectrum': np.abs(np.fft.rfft(enhanced_frames[0])).tolist()
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
