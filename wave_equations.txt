@@ -283,9 +283,165 @@ sin(2 * pi * t) * (1 + frame * sin(128 * pi * t)) + tanh(16 * sin(64 * t))
 sin(t) * pow(abs(cos(32 * pi * t)), frame) + sin(64 * t) * (1 - frame)
 tanh(10 * sin(t)) * frame + sin(t) * (1 + 8 * sin(32 * pi * t)) * (1 - frame)
 
+### COMPLEX WAVEFORM COLLECTION
+
+# Smooth Complex Oscillators
+sin(t) * (1 + 0.5 * sin(3 * pi * t)) * cos(2 * pi * t * frame)
+tanh(sin(t)) * sin(2 * t) * (1 + 0.3 * sin(5 * pi * t * frame))
+sin(t + 0.5 * sin(3 * t)) * (1 + 0.2 * sin(7 * pi * t * frame))
+(sin(t) + 0.5 * sin(2 * t)) * tanh(3 * sin(4 * pi * t * frame))
+sin(t) * pow(abs(sin(2 * pi * t)), 0.3 + 0.4 * frame)
+
+# Evolving Harmonics
+sin(t) * (1 + frame * sin(3 * t)) * exp(-0.5 * t * (1 - frame))
+tanh(2 * sin(t)) * (1 + 0.3 * sin(5 * t * frame))
+sin(t + frame * sin(2 * t)) * (1 + 0.2 * sin(3 * t))
+sin(t) * pow(abs(cos(3 * t)), frame) * (1 + 0.4 * sin(4 * t))
+sin(2 * t) * (1 + 0.5 * sin(3 * t * frame)) * exp(-0.3 * t)
+
+# Spectral Morphing
+sin(t) * (1 + 0.4 * sin(5 * t)) * pow(abs(sin(2 * t)), 0.2 + 0.3 * frame)
+tanh(sin(t + 0.3 * sin(4 * t))) * (1 + 0.2 * sin(3 * t * frame))
+sin(t) * (1 + 0.3 * sin(7 * t)) * exp(-0.4 * t * frame)
+sin(2 * t + 0.5 * sin(3 * t)) * pow(abs(cos(4 * t)), 0.3 * frame)
+sin(t) * (1 + 0.4 * tanh(sin(5 * t))) * (1 + 0.2 * sin(3 * t * frame))
+
+# Harmonic Series Manipulation
+sin(t) + 0.5 * sin(2 * t) * frame + 0.25 * sin(3 * t) * pow(frame, 2)
+sin(t) * (1 + 0.3 * sin(4 * t)) * pow(abs(sin(2 * t)), 0.4 * frame)
+tanh(2 * sin(t)) * (1 + 0.4 * sin(3 * t * frame)) * exp(-0.2 * t)
+sin(t + 0.4 * sin(3 * t)) * (1 + 0.3 * sin(5 * t * frame))
+sin(2 * t) * pow(abs(sin(3 * t)), 0.3) * (1 + 0.2 * sin(4 * t * frame))
+
+# Phase Modulation Series
+sin(t + 0.5 * sin(3 * t * frame)) * (1 + 0.3 * sin(4 * t))
+sin(t) * (1 + 0.4 * sin(5 * t * frame)) * pow(abs(cos(2 * t)), 0.3)
+tanh(sin(t + 0.3 * sin(4 * t))) * (1 + 0.2 * sin(6 * t * frame))
+sin(2 * t + 0.4 * sin(3 * t)) * exp(-0.3 * t * frame)
+sin(t) * (1 + 0.5 * tanh(sin(4 * t))) * pow(abs(sin(3 * t)), 0.4 * frame)
+
+# Amplitude Modulation Patterns
+sin(t) * (1 + 0.4 * sin(3 * t)) * (1 + 0.3 * sin(5 * t * frame))
+tanh(2 * sin(t)) * (1 + 0.3 * sin(4 * t * frame)) * exp(-0.2 * t)
+sin(t + 0.3 * sin(4 * t)) * pow(abs(sin(2 * t)), 0.3 + 0.4 * frame)
+sin(2 * t) * (1 + 0.4 * sin(3 * t)) * (1 + 0.2 * sin(5 * t * frame))
+sin(t) * tanh(sin(3 * t)) * (1 + 0.3 * sin(4 * t * frame))
+
+# Frequency Modulation Series
+sin(t + 0.4 * sin(3 * t) * frame) * (1 + 0.3 * sin(5 * t))
+sin(t) * (1 + 0.5 * sin(4 * t * frame)) * pow(abs(sin(2 * t)), 0.3)
+tanh(sin(t + 0.3 * sin(5 * t))) * (1 + 0.2 * sin(3 * t * frame))
+sin(2 * t + 0.4 * sin(4 * t)) * exp(-0.3 * t * (1 - frame))
+sin(t) * (1 + 0.4 * tanh(sin(3 * t))) * (1 + 0.3 * sin(5 * t * frame))
+
+# Harmonic Stacking
+sin(t) + 0.5 * sin(2 * t) * frame + 0.25 * sin(3 * t) * pow(frame, 2) + 0.125 * sin(4 * t) * pow(frame, 3)
+sin(t) * (1 + 0.3 * sin(4 * t)) * (1 + 0.2 * sin(7 * t * frame))
+tanh(2 * sin(t)) * (1 + 0.4 * sin(3 * t * frame)) * exp(-0.3 * t)
+sin(t + 0.3 * sin(5 * t)) * pow(abs(cos(2 * t)), 0.4 * frame)
+sin(2 * t) * (1 + 0.5 * sin(3 * t)) * (1 + 0.3 * sin(4 * t * frame))
+
+# Phase Distortion Series
+sin(t + 0.4 * pow(sin(3 * t), 2) * frame) * (1 + 0.3 * sin(5 * t))
+sin(t) * (1 + 0.5 * tanh(sin(4 * t * frame))) * pow(abs(sin(2 * t)), 0.3)
+tanh(sin(t + 0.3 * sin(6 * t))) * (1 + 0.2 * sin(3 * t * frame))
+sin(2 * t + 0.4 * pow(sin(3 * t), 3)) * exp(-0.2 * t * frame)
+sin(t) * (1 + 0.4 * sin(5 * t)) * (1 + 0.3 * tanh(sin(3 * t * frame)))
+
+# Spectral Evolution
+sin(t) * (1 + 0.4 * sin(3 * t)) * pow(abs(sin(5 * t)), 0.3 + 0.4 * frame)
+tanh(2 * sin(t)) * (1 + 0.3 * sin(4 * t * frame)) * exp(-0.3 * t)
+sin(t + 0.3 * sin(6 * t)) * (1 + 0.2 * sin(3 * t)) * pow(abs(cos(4 * t)), frame)
+sin(2 * t) * (1 + 0.5 * tanh(sin(3 * t))) * (1 + 0.3 * sin(5 * t * frame))
+sin(t) * pow(abs(sin(4 * t)), 0.4) * (1 + 0.3 * sin(3 * t * frame))
+
+# Complex Modulation
+sin(t + 0.4 * sin(3 * t) * frame) * (1 + 0.3 * tanh(sin(5 * t)))
+sin(t) * (1 + 0.5 * sin(4 * t * frame)) * pow(abs(cos(2 * t)), 0.3 + 0.4 * frame)
+tanh(sin(t + 0.3 * sin(7 * t))) * (1 + 0.2 * sin(3 * t * frame)) * exp(-0.2 * t)
+sin(2 * t + 0.4 * pow(sin(3 * t), 2)) * (1 + 0.3 * sin(5 * t * frame))
+sin(t) * (1 + 0.4 * sin(6 * t)) * pow(abs(sin(3 * t)), 0.3 * frame)
+
+# Harmonic Morphing
+sin(t) * (1 + 0.4 * sin(3 * t)) * (1 + 0.3 * tanh(sin(5 * t * frame)))
+tanh(2 * sin(t)) * (1 + 0.3 * sin(4 * t * frame)) * pow(abs(cos(3 * t)), frame)
+sin(t + 0.3 * sin(6 * t)) * exp(-0.2 * t * (1 - frame)) * (1 + 0.2 * sin(4 * t))
+sin(2 * t) * (1 + 0.5 * sin(3 * t)) * pow(abs(sin(5 * t)), 0.3 + 0.4 * frame)
+sin(t) * (1 + 0.4 * tanh(sin(4 * t))) * (1 + 0.3 * sin(3 * t * frame))
+
 # Additional variations can be created by:
-# 1. Combining different equations with frame interpolation
-# 2. Adding more harmonics (sin(16*t), sin(32*t), etc.)
-# 3. Using different waveshaping functions (tanh, pow, sign)
-# 4. Modulating the phase with frame parameter
-# 5. Adding exponential decay for transient shaping
+# 1. Combining different modulation techniques
+# 2. Using different harmonics ratios
+# 3. Varying the modulation depths
+# 4. Adding phase offsets
+# 5. Using different envelope shapes
+
+### SPECTRAL WARPING ###
+sin(t) * (1 + 0.4 * sin(3 * t)) * pow(abs(tanh(sin(4 * t))), 0.3 + 0.4 * frame)
+sin(t + 0.3 * sin(5 * t)) * (1 + 0.2 * tanh(sin(3 * t * frame)))
+tanh(2 * sin(t)) * pow(abs(sin(4 * t)), 0.4) * (1 + 0.3 * sin(5 * t * frame))
+sin(2 * t + 0.4 * sin(3 * t)) * exp(-0.2 * t) * (1 + 0.3 * sin(4 * t * frame))
+sin(t) * (1 + 0.5 * tanh(sin(3 * t))) * pow(abs(cos(4 * t)), 0.3 * frame)
+
+# Complex Phase Modulation
+sin(t + 0.4 * sin(3 * t) + 0.2 * sin(5 * t * frame)) * (1 + 0.3 * sin(4 * t))
+sin(t) * (1 + 0.4 * tanh(sin(5 * t))) * pow(abs(sin(3 * t)), 0.3 + 0.4 * frame)
+tanh(sin(t + 0.3 * sin(4 * t))) * exp(-0.2 * t) * (1 + 0.3 * sin(5 * t * frame))
+sin(2 * t + 0.5 * sin(3 * t)) * (1 + 0.2 * sin(4 * t * frame))
+sin(t) * pow(abs(cos(4 * t)), 0.4) * (1 + 0.3 * tanh(sin(3 * t * frame)))
+
+# Harmonic Cascades
+sin(t) + 0.5 * sin(2 * t) * frame + 0.25 * sin(3 * t) * pow(frame, 2) + 0.125 * sin(4 * t) * pow(frame, 3) + 0.0625 * sin(5 * t) * pow(frame, 4)
+sin(t) * (1 + 0.4 * sin(3 * t)) * pow(abs(sin(5 * t)), 0.3) * (1 + 0.2 * sin(4 * t * frame))
+tanh(2 * sin(t)) * (1 + 0.3 * sin(4 * t * frame)) * exp(-0.3 * t)
+sin(t + 0.4 * sin(3 * t)) * (1 + 0.2 * tanh(sin(5 * t))) * pow(abs(cos(4 * t)), frame)
+sin(2 * t) * (1 + 0.5 * sin(3 * t)) * (1 + 0.3 * sin(4 * t * frame))
+
+# Spectral Folding
+sin(t) * (1 + 0.4 * tanh(sin(3 * t))) * pow(abs(sin(5 * t)), 0.3 + 0.4 * frame)
+sin(t + 0.3 * sin(4 * t)) * exp(-0.2 * t) * (1 + 0.3 * sin(5 * t * frame))
+tanh(sin(t + 0.4 * sin(3 * t))) * (1 + 0.2 * sin(4 * t * frame))
+sin(2 * t) * pow(abs(cos(3 * t)), 0.4) * (1 + 0.3 * tanh(sin(5 * t * frame)))
+sin(t) * (1 + 0.5 * sin(4 * t)) * pow(abs(sin(3 * t)), 0.3 * frame)
+
+# Harmonic Phasing
+sin(t + 0.4 * sin(3 * t)) * (1 + 0.3 * sin(5 * t * frame)) * exp(-0.2 * t)
+sin(t) * pow(abs(sin(4 * t)), 0.4) * (1 + 0.3 * tanh(sin(3 * t * frame)))
+tanh(2 * sin(t)) * (1 + 0.4 * sin(3 * t)) * pow(abs(cos(5 * t)), frame)
+sin(2 * t + 0.3 * sin(4 * t)) * (1 + 0.2 * sin(3 * t * frame))
+sin(t) * (1 + 0.5 * tanh(sin(4 * t))) * exp(-0.3 * t * (1 - frame))
+
+# Complex Harmonics
+sin(t) * (1 + 0.4 * sin(3 * t)) * pow(abs(sin(5 * t)), 0.3) * (1 + 0.2 * sin(4 * t * frame))
+sin(t + 0.3 * sin(4 * t)) * tanh(sin(3 * t)) * (1 + 0.3 * sin(5 * t * frame))
+tanh(sin(t + 0.4 * sin(3 * t))) * exp(-0.2 * t) * pow(abs(cos(4 * t)), frame)
+sin(2 * t) * (1 + 0.5 * sin(3 * t)) * (1 + 0.3 * tanh(sin(4 * t * frame)))
+sin(t) * pow(abs(sin(5 * t)), 0.4) * (1 + 0.2 * sin(3 * t * frame))
+
+# Spectral Interleaving
+sin(t + 0.4 * sin(3 * t)) * (1 + 0.3 * tanh(sin(5 * t))) * pow(abs(sin(4 * t)), frame)
+sin(t) * (1 + 0.5 * sin(4 * t)) * exp(-0.2 * t) * (1 + 0.3 * sin(3 * t * frame))
+tanh(2 * sin(t)) * pow(abs(cos(3 * t)), 0.4) * (1 + 0.2 * sin(5 * t * frame))
+sin(2 * t + 0.3 * sin(4 * t)) * (1 + 0.4 * sin(3 * t)) * exp(-0.3 * t * frame)
+sin(t) * (1 + 0.4 * tanh(sin(5 * t))) * pow(abs(sin(3 * t)), 0.3 + 0.4 * frame)
+
+# Phase Shifting
+sin(t + 0.4 * sin(3 * t) * frame) * (1 + 0.3 * sin(5 * t)) * exp(-0.2 * t)
+sin(t) * pow(abs(sin(4 * t)), 0.4) * (1 + 0.3 * tanh(sin(3 * t * frame)))
+tanh(sin(t + 0.3 * sin(5 * t))) * (1 + 0.2 * sin(4 * t)) * pow(abs(cos(3 * t)), frame)
+sin(2 * t) * (1 + 0.5 * sin(3 * t)) * exp(-0.3 * t) * (1 + 0.2 * sin(4 * t * frame))
+sin(t) * (1 + 0.4 * tanh(sin(4 * t))) * pow(abs(sin(5 * t)), 0.3 * frame)
+
+# Harmonic Weaving
+sin(t) * (1 + 0.4 * sin(3 * t)) * pow(abs(sin(5 * t)), 0.3) * (1 + 0.2 * tanh(sin(4 * t * frame)))
+sin(t + 0.3 * sin(4 * t)) * exp(-0.2 * t) * (1 + 0.3 * sin(5 * t * frame))
+tanh(2 * sin(t)) * pow(abs(cos(3 * t)), 0.4) * (1 + 0.2 * sin(4 * t)) * frame
+sin(2 * t + 0.4 * sin(3 * t)) * (1 + 0.5 * sin(5 * t)) * exp(-0.3 * t * frame)
+sin(t) * (1 + 0.4 * tanh(sin(4 * t))) * pow(abs(sin(3 * t)), 0.3 + 0.4 * frame)
+
+# Additional techniques used:
+# 1. Careful balancing of modulation depths
+# 2. Strategic use of tanh for soft clipping
+# 3. Exponential decay for natural evolution
+# 4. Harmonic ratios chosen for musicality
+# 5. Frame-based interpolation for smooth morphing
