@@ -1,13 +1,58 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import numpy as np
-import tempfile
-import os
-import struct
+from scipy import signal
+import logging
 import io
+import struct
+from flask import send_file
+import traceback
+from functools import wraps
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+
+def handle_errors(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error in {f.__name__}: {str(e)}")
+            logger.error(traceback.format_exc())
+            return jsonify({
+                'error': str(e),
+                'details': traceback.format_exc()
+            }), 500
+    return wrapper
+
+# Configure CORS
+CORS(app, 
+     resources={r"/*": {
+         "origins": ["http://localhost:5173"],  # Vite's default dev server
+         "methods": ["GET", "POST", "OPTIONS"],
+         "allow_headers": ["Content-Type", "Authorization"],
+         "expose_headers": ["Content-Type", "Authorization"],
+         "supports_credentials": True,
+         "send_wildcard": False
+     }})
+
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin and origin in ["http://localhost:5173"]:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Vary', 'Origin')
+    return response
 
 def generate_basic_waveform(waveform_type, num_samples=2048):
     """Generate a basic waveform."""
@@ -178,33 +223,94 @@ def lorenz_wavefold(waveform, sigma=10, rho=28, beta=2.667, dt=0.01):
     Returns:
         Folded waveform with chaotic modulation
     """
-    # Convert input to numpy array if it's a list
-    waveform = np.array(waveform)
-    
-    # Initialize Lorenz system
-    x, y, z = 0.1, 0.1, 0.1
-    folded_wave = np.zeros_like(waveform)
-    
-    # Apply folding with Lorenz modulation
-    for i, s in enumerate(waveform):
-        # Update Lorenz system
-        dx = sigma * (y - x) * dt
-        dy = (x * (rho - z) - y) * dt
-        dz = (x * y - beta * z) * dt
-        x, y, z = x + dx, y + dy, z + dz
+    try:
+        logger.debug(f"Lorenz input shape: {np.array(waveform).shape}, type: {type(waveform)}")
+        logger.debug(f"Parameters: sigma={sigma}, rho={rho}, beta={beta}, dt={dt}")
         
-        # Use chaotic y-value to modulate fold threshold
-        fold_threshold = np.tanh(y)
-        folded_wave[i] = np.clip(s, -fold_threshold, fold_threshold)
+        # Convert input to numpy array if it's a list
+        waveform = np.array(waveform, dtype=np.float64)
+        if waveform.size == 0:
+            raise ValueError("Empty waveform array")
+            
+        # Initialize Lorenz system
+        x, y, z = 0.1, 0.1, 0.1
+        folded_wave = np.zeros_like(waveform, dtype=np.float64)
+        
+        # Apply folding with Lorenz modulation
+        for i, s in enumerate(waveform):
+            # Update Lorenz system
+            dx = sigma * (y - x) * dt
+            dy = (x * (rho - z) - y) * dt
+            dz = (x * y - beta * z) * dt
+            x, y, z = x + dx, y + dy, z + dz
+            
+            # Use chaotic y-value to modulate fold threshold
+            fold_threshold = np.tanh(y)
+            folded_wave[i] = np.clip(s, -fold_threshold, fold_threshold)
+        
+        # Normalize the output
+        max_val = np.max(np.abs(folded_wave))
+        if max_val > 0:
+            folded_wave = folded_wave / max_val
+            
+        logger.debug(f"Lorenz output shape: {folded_wave.shape}")
+        return folded_wave
+        
+    except Exception as e:
+        logger.error(f"Error in lorenz_wavefold: {str(e)}")
+        logger.error(f"Waveform stats - min: {np.min(waveform) if waveform.size > 0 else 'N/A'}, "
+                    f"max: {np.max(waveform) if waveform.size > 0 else 'N/A'}, "
+                    f"mean: {np.mean(waveform) if waveform.size > 0 else 'N/A'}")
+        raise
+
+def optimize_array(arr, precision=4):
+    """Optimize array by reducing precision."""
+    return np.round(arr, precision)
+
+def validate_frames(frames):
+    """Validate frames data."""
+    if not isinstance(frames, list):
+        raise ValueError("Frames must be a list")
+    if not frames:
+        raise ValueError("No frames provided")
+    if not all(isinstance(frame, list) for frame in frames):
+        raise ValueError("Each frame must be a list")
+    if not all(all(isinstance(x, (int, float)) or (isinstance(x, str) and x.replace('.', '').isdigit()) for x in frame) for frame in frames):
+        raise ValueError("Frame values must be numbers")
+    return True
+
+def validate_params(params):
+    """Validate chaos parameters."""
+    required = {'sigma', 'rho', 'beta', 'dt'}
+    missing = required - set(params.keys())
+    if missing:
+        raise ValueError(f"Missing required parameters: {missing}")
     
-    # Normalize the output
-    max_val = np.max(np.abs(folded_wave))
-    if max_val > 0:
-        folded_wave = folded_wave / max_val
-    
-    return folded_wave
+    try:
+        validated = {
+            'sigma': float(params['sigma']),
+            'rho': float(params['rho']),
+            'beta': float(params['beta']),
+            'dt': float(params['dt'])
+        }
+        
+        # Validate ranges
+        if validated['sigma'] <= 0:
+            raise ValueError("sigma must be positive")
+        if validated['rho'] <= 0:
+            raise ValueError("rho must be positive")
+        if validated['beta'] <= 0:
+            raise ValueError("beta must be positive")
+        if validated['dt'] <= 0 or validated['dt'] >= 1:
+            raise ValueError("dt must be between 0 and 1")
+            
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"Invalid parameter value: {str(e)}")
+        
+    return validated
 
 @app.route('/api/waveform/equation', methods=['POST'])
+@handle_errors
 def generate_from_equation():
     """Generate wavetable from equation."""
     try:
@@ -240,9 +346,12 @@ def generate_from_equation():
         
         return jsonify(response)
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        logger.error(f"Unexpected error in generate_from_equation: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/waveform/basic', methods=['GET'])
+@handle_errors
 def get_basic_waveform():
     """Generate basic waveform."""
     try:
@@ -267,9 +376,12 @@ def get_basic_waveform():
         
         return jsonify(response)
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        logger.error(f"Unexpected error in get_basic_waveform: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/waveform/download', methods=['POST'])
+@handle_errors
 def download_waveform():
     """Generate and download wavetable as WAV file."""
     try:
@@ -289,9 +401,12 @@ def download_waveform():
             download_name='wavetable.wav'
         )
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        logger.error(f"Unexpected error in download_waveform: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/waveform/enhance', methods=['POST'])
+@handle_errors
 def enhance_waveform():
     """Enhance the harmonic content of a waveform."""
     try:
@@ -320,37 +435,103 @@ def enhance_waveform():
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        logger.error(f"Unexpected error in enhance_waveform: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/waveform/chaos_fold', methods=['POST'])
+@app.route('/api/waveform/chaos_fold', methods=['POST', 'OPTIONS'])
+@handle_errors
 def apply_chaos_fold():
     """Apply chaotic wavefolding to frames."""
+    if request.method == 'OPTIONS':
+        return make_response('', 204)
+        
     try:
-        data = request.get_json()
-        frames = data.get('frames', [])
-        sigma = float(data.get('sigma', 10.0))
-        rho = float(data.get('rho', 28.0))
-        beta = float(data.get('beta', 2.667))
-        dt = float(data.get('dt', 0.01))
+        logger.debug("Received chaos fold request")
         
-        if not frames:
-            raise ValueError("No frame data provided")
+        if not request.is_json:
+            logger.error("Request is not JSON")
+            return jsonify({'error': 'Request must be JSON'}), 400
             
+        try:
+            data = request.get_json(force=True)
+            logger.debug(f"Raw request data: {data}")
+        except Exception as e:
+            logger.error(f"Failed to parse JSON: {str(e)}")
+            return jsonify({'error': 'Invalid JSON format'}), 400
+            
+        if not data:
+            logger.error("Empty request data")
+            return jsonify({'error': 'No data provided'}), 400
+            
+        # Extract and validate frames
+        frames = data.get('frames')
+        if not frames:
+            logger.error("No frame data provided")
+            return jsonify({'error': 'No frame data provided'}), 400
+            
+        try:
+            validate_frames(frames)
+            frames = [[float(x) for x in frame] for frame in frames]
+        except ValueError as e:
+            logger.error(f"Frame validation error: {str(e)}")
+            return jsonify({'error': str(e)}), 400
+            
+        # Extract and validate parameters
+        try:
+            params = validate_params(data)
+        except ValueError as e:
+            logger.error(f"Parameter validation error: {str(e)}")
+            return jsonify({'error': str(e)}), 400
+            
+        logger.debug(f"Processing with parameters: {params}")
+        
         # Process each frame with the chaos folder
-        folded_frames = [lorenz_wavefold(frame, sigma, rho, beta, dt).tolist() 
-                        for frame in frames]
-        
-        # Calculate spectrum for visualization
-        spectrum = np.abs(np.fft.rfft(folded_frames[0])).tolist()
-        
-        return jsonify({
-            'frames': folded_frames,
-            'waveform': folded_frames[0],
-            'spectrum': spectrum
-        })
-        
+        processed_frames = []
+        try:
+            for frame in frames:
+                frame_array = np.array(frame, dtype=np.float64)
+                if frame_array.size == 0:
+                    logger.error("Empty frame data")
+                    return jsonify({'error': 'Empty frame data'}), 400
+                    
+                folded = lorenz_wavefold(
+                    frame_array,
+                    sigma=params['sigma'],
+                    rho=params['rho'],
+                    beta=params['beta'],
+                    dt=params['dt']
+                )
+                processed_frames.append(optimize_array(folded, precision=4).tolist())
+            
+            # Calculate spectrum for visualization
+            spectrum = optimize_array(np.abs(np.fft.rfft(processed_frames[0])), precision=4).tolist()
+            
+            # Prepare response
+            response = {
+                'waveform': processed_frames[0],
+                'frames': processed_frames,
+                'frame_size': len(processed_frames[0]),
+                'num_frames': len(processed_frames),
+                'spectrum': spectrum
+            }
+            
+            # Validate response data
+            if not all(isinstance(arr, list) for arr in [response['waveform'], response['frames'][0], response['spectrum']]):
+                raise ValueError("Invalid response data format")
+            
+            logger.debug("Successfully processed chaos fold request")
+            return jsonify(response)
+            
+        except Exception as e:
+            logger.error(f"Error processing frames: {str(e)}")
+            logger.error(traceback.format_exc())
+            return jsonify({'error': f'Error processing frames: {str(e)}'}), 500
+            
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        logger.error(f"Unexpected error in apply_chaos_fold: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=8081, host='0.0.0.0')

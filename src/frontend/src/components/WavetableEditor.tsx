@@ -4,6 +4,11 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import './WavetableEditor.css';
 
+// Utility function to bound values between -1 and 1
+const boundValue = (value: number): number => {
+  return Math.max(-1, Math.min(1, value));
+};
+
 interface WaveformData {
   waveform: number[];
   frames: number[][];
@@ -23,28 +28,28 @@ const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
   const meshRef = useRef<THREE.LineSegments>(null);
   
   const geometry = useMemo(() => {
+    if (!frames?.length) return new THREE.BufferGeometry();
+
     const geometry = new THREE.BufferGeometry();
     const numFrames = frames.length;
-    const frameSize = frames[0].length;
+    const frameSize = frames[0]?.length || 0;
     
-    const vertices = [];
-    const colors = [];
+    if (!frameSize) return geometry;
+
+    const vertices: number[] = [];
+    const colors: number[] = [];
     const color = new THREE.Color('#ff4d4d');
     
-    // Sample fewer frames for reduced line density
-    const frameStep = 3; // Skip every 3rd frame
-    const sampleStep = 3; // Skip every 3rd point in each frame
-    
-    for (let i = 0; i < numFrames; i += frameStep) {
+    // Create line segments for each frame
+    for (let i = 0; i < numFrames; i++) {
       const frame = frames[i];
-      const z = (i / (numFrames - 1)) * 2 - 1;
+      const z = (i / numFrames) * 2 - 1;
       
-      // Create line segments with reduced density
-      for (let j = 0; j < frameSize - sampleStep; j += sampleStep) {
-        const x1 = (j / (frameSize - 1)) * 2 - 1;
-        const x2 = ((j + sampleStep) / (frameSize - 1)) * 2 - 1;
-        const y1 = frame[j] * gain;
-        const y2 = frame[j + sampleStep] * gain;
+      for (let j = 0; j < frameSize - 1; j++) {
+        const x1 = (j / frameSize) * 2 - 1;
+        const x2 = ((j + 1) / frameSize) * 2 - 1;
+        const y1 = boundValue(frame[j] * gain);
+        const y2 = boundValue(frame[j + 1] * gain);
         
         vertices.push(x1, y1, z);
         vertices.push(x2, y2, z);
@@ -53,7 +58,7 @@ const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
         colors.push(color.r, color.g, color.b);
       }
     }
-    
+
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
@@ -62,7 +67,7 @@ const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
 
   return (
     <lineSegments ref={meshRef} geometry={geometry}>
-      <lineBasicMaterial color="#ff4d4d" transparent opacity={0.8} linewidth={3} />
+      <lineBasicMaterial color="#ff4d4d" transparent opacity={0.8} linewidth={2} />
     </lineSegments>
   );
 };
@@ -79,34 +84,70 @@ const WavetableEditor: React.FC = () => {
   const [gain, setGain] = useState<number>(1.0);
   const [isDraggingFormant, setIsDraggingFormant] = useState<boolean>(false);
   const [chaosParams, setChaosParams] = useState({
-    sigma: 10,
-    rho: 28,
-    beta: 2.667,
-    dt: 0.01
+    sigma: 5,
+    rho: 14,
+    beta: 1.33,
+    dt: 0.005
   });
   const [isChaosEnabled, setIsChaosEnabled] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [debouncedParams, setDebouncedParams] = useState(chaosParams);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const harmonicTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastEnhanceTime = useRef<number>(0);
   const originalWaveformRef = useRef<WaveformData | null>(null);
+  const lastValidWaveformRef = useRef<WaveformData | null>(null);
+
+  const API_BASE = 'http://localhost:8081';
+
+  const fetchWithCredentials = async (url: string, options: RequestInit = {}) => {
+    const defaultOptions: RequestInit = {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(options.headers || {})
+      }
+    };
+
+    const response = await fetch(url, defaultOptions);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+      throw new Error(errorData.error || `Server error: ${response.status}`);
+    }
+    return response;
+  };
 
   // Store original waveform when it's first generated
   useEffect(() => {
     if (waveformData && (!originalWaveformRef.current || equation !== originalWaveformRef.current.equation)) {
-      originalWaveformRef.current = {
-        ...waveformData,
-        frames: waveformData.frames.map(frame => [...frame]),
-        waveform: [...waveformData.waveform],
-        equation: equation,
-        type: waveformData.type || 'custom'
-      };
+      try {
+        originalWaveformRef.current = {
+          ...waveformData,
+          frames: waveformData.frames.map(frame => [...frame]),
+          waveform: [...waveformData.waveform],
+          equation: equation,
+          type: waveformData.type || 'custom'
+        };
+      } catch (err) {
+        console.error('Error storing original waveform:', err);
+        setError('Failed to store original waveform data');
+      }
     }
   }, [waveformData, equation]);
 
   useEffect(() => {
     // Generate initial sine wave
-    handleBasicWaveform('sine');
+    handleBasicWaveform('sine').catch(err => {
+      console.error('Error generating initial sine wave:', err);
+      setError('Failed to generate initial waveform');
+    });
   }, []); // Only run once on mount
 
   // Simple preview of formant effect for immediate visual feedback
@@ -159,21 +200,13 @@ const WavetableEditor: React.FC = () => {
       setError(null);
       setActivePreset(null); // Clear active preset when generating custom equation
       
-      const response = await fetch('http://localhost:8081/api/waveform/equation', {
+      const response = await fetchWithCredentials(`${API_BASE}/api/waveform/equation`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           equation,
           frames: numFrames
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate waveform');
-      }
 
       const data = await response.json();
       
@@ -198,55 +231,64 @@ const WavetableEditor: React.FC = () => {
         drawWaveform(canvasRef.current, data.waveform);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error generating waveform:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate waveform');
     }
   };
 
   const handleBasicWaveform = async (type: string) => {
     try {
       setError(null);
-      // Update both preset and equation
-      setActivePreset(type);
-      
-      // Set the equation based on type
-      const equations = {
-        sine: 'sin(t)',
-        square: 'sign(sin(t))',
-        sawtooth: '2 * (t - 0.5)',
-        triangle: '2 * abs(2 * (t - 0.5)) - 1'
-      };
-      const newEquation = equations[type];
-      setEquation(newEquation);
-
-      const response = await fetch(`http://localhost:8081/api/waveform/basic?type=${type}&frames=${numFrames}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate basic waveform');
-      }
-
-      const data: WaveformData = await response.json();
-      // Reset harmonic strength when changing waveform
-      setHarmonicStrength(0);
-      
-      // Store the original data with equation
-      const newWaveformData = {
-        ...data,
-        type,
-        equation: newEquation
-      };
-      
-      setWaveformData(newWaveformData);
-      originalWaveformRef.current = {
-        ...newWaveformData,
-        frames: newWaveformData.frames.map(frame => [...frame]),
-        waveform: [...newWaveformData.waveform]
-      };
+      const response = await fetchWithCredentials(`${API_BASE}/api/waveform/basic?type=${type}&frames=${numFrames}`);
+      const data = await response.json();
+      setWaveformData(data);
       
       if (canvasRef.current) {
         drawWaveform(canvasRef.current, data.waveform);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error generating waveform:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate waveform');
+    }
+  };
+
+  const handleSpectralEffectChange = async (effect: 'formant' | 'gain', value: number) => {
+    if (effect === 'formant') {
+      setHarmonicStrength(value);
+    } else if (effect === 'gain') {
+      setGain(value);
+    }
+    
+    if (!originalWaveformRef.current) return;
+    
+    try {
+      const response = await fetchWithCredentials(`${API_BASE}/api/waveform/apply_effects`, {
+        method: 'POST',
+        body: JSON.stringify({
+          frames: originalWaveformRef.current.frames,
+          formant: effect === 'formant' ? value : harmonicStrength,
+          gain: effect === 'gain' ? value : gain
+        })
+      });
+
+      const data = await response.json();
+      if (!data || !Array.isArray(data.frames)) {
+        throw new Error('Invalid response from server');
+      }
+
+      setWaveformData(prev => ({
+        ...prev,
+        ...data,
+        type: prev.type,
+        equation: prev.equation
+      }));
+
+      if (canvasRef.current) {
+        drawWaveform(canvasRef.current, data.waveform);
+      }
+    } catch (err) {
+      console.error('Effect application error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to apply effects');
     }
   };
 
@@ -258,22 +300,14 @@ const WavetableEditor: React.FC = () => {
     lastEnhanceTime.current = now;
 
     try {
-      const response = await fetch('http://localhost:8081/api/waveform/enhance', {
+      const response = await fetchWithCredentials(`${API_BASE}/api/waveform/enhance`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           frames: originalWaveformRef.current.frames,
           strength: harmonicStrength,
           type: originalWaveformRef.current.type
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to enhance harmonics');
-      }
 
       const enhancedData = await response.json();
       
@@ -293,46 +327,109 @@ const WavetableEditor: React.FC = () => {
         }
       }
     } catch (err) {
+      console.error('Error enhancing harmonics:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while enhancing harmonics');
     }
   };
 
+  const sanitizeNumber = (value: number): number => {
+    const num = Number(value);
+    return isNaN(num) ? 0 : Number(num.toFixed(4));
+  };
+
+  const optimizeNumericArray = (arr: number[]): number[] => {
+    return arr.map(x => sanitizeNumber(x));
+  };
+
+  const normalizeArray = (arr: number[]): number[] => {
+    const max = Math.max(...arr.map(Math.abs));
+    return max === 0 ? arr : arr.map(x => x / max);
+  };
+
   const applyChaosFolder = async () => {
-    if (!waveformData || !originalWaveformRef.current) return;
+    if (!waveformData || !originalWaveformRef.current) {
+      setError('No waveform data available');
+      return;
+    }
 
     try {
-      const response = await fetch('http://localhost:8081/api/waveform/chaos_fold', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          frames: originalWaveformRef.current.frames,
-          ...chaosParams
-        }),
+      setError(null);
+      setIsProcessing(true);
+      
+      // Process frames data
+      const frames = originalWaveformRef.current.frames.map(frame => 
+        frame.map(value => {
+          const num = Number(value);
+          if (isNaN(num)) {
+            throw new Error('Frame values must be numbers');
+          }
+          return boundValue(num);
+        })
+      );
+
+      const params = {
+        sigma: Number(debouncedParams.sigma),
+        rho: Number(debouncedParams.rho),
+        beta: Number(debouncedParams.beta),
+        dt: Number(debouncedParams.dt)
+      };
+
+      // Validate parameters
+      Object.entries(params).forEach(([key, value]) => {
+        if (isNaN(value)) {
+          throw new Error(`Invalid ${key} parameter: ${value}`);
+        }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to apply chaos folder');
+      const response = await fetchWithCredentials(`${API_BASE}/api/waveform/chaos_fold`, {
+        method: 'POST',
+        body: JSON.stringify({
+          frames,
+          ...params
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!data || !Array.isArray(data.frames) || !Array.isArray(data.waveform)) {
+        throw new Error('Invalid response from server');
       }
 
-      const foldedData = await response.json();
-      
-      setWaveformData(prev => ({
-        ...prev,
-        frames: foldedData.frames,
-        waveform: foldedData.frames[0],
-        spectrum: foldedData.spectrum
-      }));
+      // Ensure all values stay within bounds
+      data.frames = data.frames.map(frame => frame.map(v => boundValue(v)));
+      data.waveform = data.waveform.map(v => boundValue(v));
+
+      const newWaveformData: WaveformData = {
+        ...data,
+        type: waveformData.type || 'custom',
+        equation: waveformData.equation || ''
+      };
+
+      setWaveformData(newWaveformData);
 
       if (canvasRef.current) {
-        drawWaveform(canvasRef.current, foldedData.frames[0]);
+        drawWaveform(canvasRef.current, data.waveform);
       }
     } catch (err) {
+      console.error('Chaos folder error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while applying chaos folder');
+    } finally {
+      setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedParams(chaosParams);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [chaosParams]);
+
+  useEffect(() => {
+    if (isChaosEnabled && originalWaveformRef.current) {
+      applyChaosFolder();
+    }
+  }, [debouncedParams, isChaosEnabled]);
 
   const drawWaveform = (canvas: HTMLCanvasElement, data: number[]) => {
     const ctx = canvas.getContext('2d');
@@ -371,7 +468,8 @@ const WavetableEditor: React.FC = () => {
 
     data.forEach((y, i) => {
       const x = (i / data.length) * width;
-      const scaledY = y * gain;
+      // Ensure y value stays within bounds
+      const scaledY = boundValue(y * gain);
       if (i === 0) {
         ctx.moveTo(x, centerY + scaledY * scaleY);
       } else {
@@ -389,21 +487,13 @@ const WavetableEditor: React.FC = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:8081/api/waveform/download', {
+      const response = await fetchWithCredentials(`${API_BASE}/api/waveform/download`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           frames: waveformData.frames,
           gain: gain
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to download waveform');
-      }
 
       // Create a blob from the response
       const blob = await response.blob();
@@ -420,8 +510,112 @@ const WavetableEditor: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
+      console.error('Error downloading waveform:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while downloading');
     }
+  };
+
+  const renderChaosControls = () => (
+    <div className="chaos-controls">
+      <div className="control-group">
+        <label>
+          <input
+            type="checkbox"
+            checked={isChaosEnabled}
+            onChange={(e) => setIsChaosEnabled(e.target.checked)}
+            disabled={isProcessing}
+          />
+          Enable Chaos
+        </label>
+      </div>
+      
+      {isChaosEnabled && (
+        <>
+          <div className="control-group">
+            <label>Sigma: {chaosParams.sigma.toFixed(2)}</label>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="0.1"
+              value={chaosParams.sigma}
+              onChange={(e) => setChaosParams(prev => ({ ...prev, sigma: Number(e.target.value) }))}
+              disabled={isProcessing}
+            />
+          </div>
+          
+          <div className="control-group">
+            <label>Rho: {chaosParams.rho.toFixed(2)}</label>
+            <input
+              type="range"
+              min="0"
+              max="28"
+              step="0.1"
+              value={chaosParams.rho}
+              onChange={(e) => setChaosParams(prev => ({ ...prev, rho: Number(e.target.value) }))}
+              disabled={isProcessing}
+            />
+          </div>
+          
+          <div className="control-group">
+            <label>Beta: {chaosParams.beta.toFixed(3)}</label>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step="0.01"
+              value={chaosParams.beta}
+              onChange={(e) => setChaosParams(prev => ({ ...prev, beta: Number(e.target.value) }))}
+              disabled={isProcessing}
+            />
+          </div>
+          
+          <div className="control-group">
+            <label>Time Step: {chaosParams.dt.toFixed(4)}</label>
+            <input
+              type="range"
+              min="0.001"
+              max="0.01"
+              step="0.001"
+              value={chaosParams.dt}
+              onChange={(e) => setChaosParams(prev => ({ ...prev, dt: Number(e.target.value) }))}
+              disabled={isProcessing}
+            />
+          </div>
+          
+          {isProcessing && (
+            <div className="processing-indicator">Processing...</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  const ThreeDView: React.FC<{ frames: number[][], gain: number }> = ({ frames, gain }) => {
+    return (
+      <div className="canvas-container" style={{ width: '100%', height: '400px' }}>
+        <Canvas 
+          camera={{ 
+            position: [2, 2, 2], 
+            fov: 60,
+            near: 0.1,
+            far: 1000
+          }}
+        >
+          <color attach="background" args={['#1a1a1a']} />
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 10, 10]} />
+          <WaveformMesh frames={frames} gain={gain} />
+          <OrbitControls 
+            enableDamping={true}
+            dampingFactor={0.05}
+            rotateSpeed={0.5}
+          />
+          <gridHelper args={[2, 20, '#404040', '#303030']} />
+          <axesHelper args={[1]} />
+        </Canvas>
+      </div>
+    );
   };
 
   return (
@@ -528,27 +722,20 @@ const WavetableEditor: React.FC = () => {
           </button>
         </div>
 
-        {waveformData && waveformData.frames && (
+        {waveformData && waveformData.frames && waveformData.frames.length > 0 && (
           <>
             <div className="waveform-view">
               {viewMode === '2d' ? (
-                <>
-                  <canvas
-                    ref={canvasRef}
-                    width={600}
-                    height={200}
-                  />
-                </>
+                <canvas
+                  ref={canvasRef}
+                  width={600}
+                  height={200}
+                />
               ) : (
-                <div className="canvas-container">
-                  <Canvas camera={{ position: [1, 1, 1], fov: 75 }}>
-                    <ambientLight intensity={0.5} />
-                    <pointLight position={[10, 10, 10]} />
-                    <WaveformMesh frames={waveformData.frames} gain={gain} />
-                    <OrbitControls />
-                    <gridHelper args={[2, 20, '#404040', '#303030']} />
-                  </Canvas>
-                </div>
+                <ThreeDView 
+                  frames={waveformData.frames} 
+                  gain={gain}
+                />
               )}
             </div>
 
@@ -560,14 +747,13 @@ const WavetableEditor: React.FC = () => {
                   <input
                     id="harmonic-strength"
                     type="range"
+                    value={harmonicStrength}
                     min="-1"
                     max="1"
                     step="0.01"
-                    value={harmonicStrength}
                     onMouseDown={() => setIsDraggingFormant(true)}
                     onMouseUp={() => {
                       setIsDraggingFormant(false);
-                      // Force an enhance after drag ends
                       enhanceHarmonics();
                     }}
                     onMouseLeave={() => {
@@ -597,6 +783,7 @@ const WavetableEditor: React.FC = () => {
                   />
                   <span>{harmonicStrength.toFixed(2)}</span>
                 </label>
+
                 <label htmlFor="gain">
                   Gain:
                   <input
@@ -622,84 +809,11 @@ const WavetableEditor: React.FC = () => {
         )}
       </div>
       
-      <div className="chaos-controls" style={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
-        <h3>Chaos Wavefolder</h3>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-          <label>
-            <input
-              type="checkbox"
-              checked={isChaosEnabled}
-              onChange={(e) => setIsChaosEnabled(e.target.checked)}
-            />
-            Enable Chaos
-          </label>
-          {isChaosEnabled && (
-            <button
-              onClick={applyChaosFolder}
-              className="generate-btn"
-              type="button"
-            >
-              Apply Chaos Fold
-            </button>
-          )}
+      <div className="spectral-effects">
+        <h2>Chaos Wavefolder</h2>
+        <div className="control-row">
+          {renderChaosControls()}
         </div>
-        
-        {isChaosEnabled && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-            <div>
-              <label htmlFor="sigma">Sigma:</label>
-              <input
-                id="sigma"
-                type="range"
-                min="1"
-                max="50"
-                step="0.1"
-                value={chaosParams.sigma}
-                onChange={(e) => setChaosParams(prev => ({ ...prev, sigma: parseFloat(e.target.value) }))}
-              />
-              <span>{chaosParams.sigma.toFixed(1)}</span>
-            </div>
-            <div>
-              <label htmlFor="rho">Rho:</label>
-              <input
-                id="rho"
-                type="range"
-                min="1"
-                max="100"
-                step="0.1"
-                value={chaosParams.rho}
-                onChange={(e) => setChaosParams(prev => ({ ...prev, rho: parseFloat(e.target.value) }))}
-              />
-              <span>{chaosParams.rho.toFixed(1)}</span>
-            </div>
-            <div>
-              <label htmlFor="beta">Beta:</label>
-              <input
-                id="beta"
-                type="range"
-                min="0.1"
-                max="10"
-                step="0.001"
-                value={chaosParams.beta}
-                onChange={(e) => setChaosParams(prev => ({ ...prev, beta: parseFloat(e.target.value) }))}
-              />
-              <span>{chaosParams.beta.toFixed(3)}</span>
-            </div>
-            <div>
-              <label htmlFor="dt">Time Step:</label>
-              <input
-                id="dt"
-                type="range"
-                min="0.001"
-                max="0.1"
-                step="0.001"
-                value={chaosParams.dt}
-                onChange={(e) => setChaosParams(prev => ({ ...prev, dt: parseFloat(e.target.value) }))}
-              />
-              <span>{chaosParams.dt.toFixed(3)}</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

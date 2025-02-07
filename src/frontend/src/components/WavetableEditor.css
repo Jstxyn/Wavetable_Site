@@ -266,3 +266,121 @@
 .view-controls button.active {
   background: #ff4d4d;
 }
+
+.spectral-effects {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(30, 30, 30, 0.8);
+  border-radius: 8px;
+}
+
+.spectral-effects h2 {
+  color: #ff4444;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+}
+
+.control-row {
+  margin-bottom: 15px;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+}
+
+.chaos-controls {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(40, 40, 40, 0.5);
+  border-radius: 6px;
+}
+
+.chaos-controls label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  width: 100%;
+}
+
+.chaos-controls input[type="range"] {
+  flex: 1;
+  height: 4px;
+  background: #ff4444;
+  border-radius: 2px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.chaos-controls input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.chaos-controls span {
+  min-width: 50px;
+  text-align: right;
+  color: #ff4444;
+}
+
+.control-button {
+  background: #ff4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.control-button:hover {
+  background: #ff6666;
+}
+
+.control-button:disabled {
+  background: #666;
+  cursor: not-allowed;
+}
+
+.processing-indicator {
+  color: #ff4d4d;
+  font-size: 0.9em;
+  margin-top: 8px;
+  text-align: center;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.control-group input[type="range"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.control-group input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.control-group input[type="range"]:disabled + label {
+  opacity: 0.5;
+}
