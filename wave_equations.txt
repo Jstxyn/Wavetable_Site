@@ -175,3 +175,117 @@ sin(t) + sin(t + frame*pi/2) + sin(t + frame*pi)
 sin(t) + frame*sin(2*t) + frame^2*sin(3*t)
 # Modulation stack
 sin(t + sin(2*t)*frame + sin(3*t)*frame^2)
+
+### DUBSTEP/BASS MUSIC WAVE TABLES ###
+
+# Aggressive Basses
+sin(t) * (1 + 3 * sin(8 * pi * t)) * frame + (1 - frame) * tanh(3 * sin(2 * pi * t))
+sin(t) * pow(abs(sin(2 * pi * t)), 0.2) * (1 + frame) + sin(8 * pi * t) * (1 - frame)
+tanh(4 * sin(2 * pi * t)) * frame + sin(t) * (1 - frame)
+sin(t) + 0.5 * sin(2 * t) * frame + 0.25 * sin(4 * t) * pow(frame, 2)
+sign(sin(t)) * pow(abs(sin(t)), 0.3 + 0.7 * frame)
+
+# Neuro Basses
+sin(t) * (1 + 2 * sin(4 * pi * t * frame)) * exp(-2 * frame * t)
+tanh(3 * sin(2 * pi * t)) * (1 + sin(8 * pi * t * frame))
+sin(t) * (1 + frame * sin(16 * pi * t)) + 0.5 * sin(2 * t) * (1 - frame)
+sin(2 * pi * t) * (1 + 3 * frame * sin(8 * pi * t)) * exp(-frame * t)
+sin(t) * pow(abs(cos(4 * pi * t)), frame) + 0.5 * sin(8 * t) * (1 - frame)
+
+# Glitch Hop Textures
+sin(t) * (1 + frame * floor(4 * t)) + cos(8 * pi * t) * (1 - frame)
+sin(t) + 0.5 * sign(sin(4 * pi * t)) * frame + 0.25 * sin(16 * t) * (1 - frame)
+sin(2 * pi * t) * (1 + frame * floor(sin(8 * pi * t))) + cos(4 * t) * (1 - frame)
+sin(t) * (1 + 2 * frame * round(sin(4 * pi * t))) + 0.5 * sin(8 * t)
+tanh(4 * sin(t)) * frame + sin(16 * pi * t) * (1 - frame)
+
+# DnB Reeses
+sin(t) * (1 + 2 * sin(4 * pi * t)) * frame + tanh(2 * sin(t)) * (1 - frame)
+sin(t) + 0.5 * sin(2 * t) * frame + 0.25 * tanh(4 * sin(4 * t)) * (1 - frame)
+sin(2 * pi * t) * (1 + frame * sin(8 * pi * t)) + 0.5 * sin(16 * t) * (1 - frame)
+sin(t) * pow(abs(sin(4 * pi * t)), 0.5 * frame) + cos(8 * t) * (1 - frame)
+tanh(3 * sin(t)) * frame + sin(2 * t) * (1 - frame)
+
+# Complex Modulated Basses
+sin(t) * (1 + 3 * sin(8 * pi * t * frame)) * exp(-2 * t * (1 - frame))
+sin(t) * (1 + frame * floor(sin(4 * pi * t))) + 0.5 * tanh(4 * sin(8 * t))
+sin(2 * pi * t) * (1 + 2 * frame * sin(16 * pi * t)) * exp(-frame * t)
+sin(t) + 0.5 * sign(sin(8 * pi * t)) * frame + 0.25 * sin(32 * t) * (1 - frame)
+tanh(4 * sin(t)) * frame + sin(4 * t) * pow(abs(sin(8 * pi * t)), 1 - frame)
+
+# Aggressive FM Basses
+sin(t + 2 * frame * sin(4 * pi * t)) * (1 + sin(8 * pi * t * (1 - frame)))
+sin(t) * (1 + 3 * sin(4 * pi * t * frame)) + 0.5 * tanh(4 * sin(8 * t))
+sin(2 * pi * t + 4 * frame * sin(8 * pi * t)) * exp(-2 * t * (1 - frame))
+sin(t) * (1 + frame * floor(sin(16 * pi * t))) + cos(4 * t) * (1 - frame)
+tanh(3 * sin(t + 2 * frame * sin(4 * pi * t))) + 0.5 * sin(8 * t)
+
+# Morphing Wavetables
+sin(t) * (1 + 2 * sin(4 * pi * t)) * frame + square(t) * (1 - frame)
+sin(t) * pow(abs(sin(2 * pi * t)), frame) + saw(t) * (1 - frame)
+triangle(t) * frame + tanh(3 * sin(2 * pi * t)) * (1 - frame)
+sin(t) * (1 + frame * sin(8 * pi * t)) + square(2 * t) * (1 - frame)
+saw(t) * frame + sin(t) * pow(abs(sin(4 * pi * t)), 1 - frame)
+
+# Harmonic Rich Basses
+sin(t) * (1 + 3 * sin(16 * pi * t * frame)) * exp(-4 * t * (1 - frame))
+sin(t) + 0.5 * sin(2 * t) * frame + 0.25 * sin(4 * t) * frame + 0.125 * sin(8 * t)
+sin(2 * pi * t) * (1 + frame * sin(32 * pi * t)) + 0.5 * tanh(4 * sin(16 * t))
+sin(t) * pow(abs(cos(8 * pi * t)), frame) + sin(16 * t) * (1 - frame)
+tanh(4 * sin(t)) * frame + sin(t) * (1 + 2 * sin(8 * pi * t)) * (1 - frame)
+
+# Metallic Textures
+sin(t) * (1 + frame * floor(8 * t)) + sin(16 * pi * t) * (1 - frame)
+sin(t) + 0.5 * sign(sin(8 * pi * t)) * frame + 0.25 * sin(32 * t)
+sin(2 * pi * t) * (1 + frame * round(sin(16 * pi * t))) + cos(8 * t)
+sin(t) * (1 + 4 * frame * sin(32 * pi * t)) * exp(-2 * t)
+tanh(5 * sin(t)) * frame + sin(t) * pow(abs(sin(16 * pi * t)), 1 - frame)
+
+# Growling Basses
+sin(t) * (1 + 3 * tanh(sin(4 * pi * t))) * frame + saw(2 * t) * (1 - frame)
+sin(t) * pow(abs(sin(4 * pi * t)), 0.3) * frame + square(t) * (1 - frame)
+triangle(t) * frame + tanh(4 * sin(2 * pi * t)) * (1 - frame)
+sin(t) * (1 + frame * sin(16 * pi * t)) + saw(4 * t) * (1 - frame)
+square(t) * frame + sin(t) * pow(abs(sin(8 * pi * t)), 1 - frame)
+
+# Experimental Textures
+sin(t) * (1 + 5 * sin(32 * pi * t * frame)) * exp(-8 * t * (1 - frame))
+sin(t) + 0.7 * sin(2 * t) * frame + 0.5 * sin(4 * t) * frame + 0.3 * sin(8 * t)
+sin(2 * pi * t) * (1 + frame * sin(64 * pi * t)) + 0.5 * tanh(8 * sin(32 * t))
+sin(t) * pow(abs(cos(16 * pi * t)), frame) + sin(32 * t) * (1 - frame)
+tanh(6 * sin(t)) * frame + sin(t) * (1 + 4 * sin(16 * pi * t)) * (1 - frame)
+
+# Glitch Textures
+sin(t) * (1 + frame * floor(16 * t)) + sin(32 * pi * t) * (1 - frame)
+sin(t) + 0.8 * sign(sin(16 * pi * t)) * frame + 0.4 * sin(64 * t)
+sin(2 * pi * t) * (1 + frame * round(sin(32 * pi * t))) + cos(16 * t)
+sin(t) * (1 + 6 * frame * sin(64 * pi * t)) * exp(-4 * t)
+tanh(8 * sin(t)) * frame + sin(t) * pow(abs(sin(32 * pi * t)), 1 - frame)
+
+# Hybrid Basses
+sin(t) * (1 + 4 * tanh(sin(8 * pi * t))) * frame + saw(4 * t) * (1 - frame)
+sin(t) * pow(abs(sin(8 * pi * t)), 0.2) * frame + square(2 * t) * (1 - frame)
+triangle(2 * t) * frame + tanh(6 * sin(4 * pi * t)) * (1 - frame)
+sin(t) * (1 + frame * sin(32 * pi * t)) + saw(8 * t) * (1 - frame)
+square(2 * t) * frame + sin(t) * pow(abs(sin(16 * pi * t)), 1 - frame)
+
+# Complex FM
+sin(t + 4 * frame * sin(8 * pi * t)) * (1 + sin(16 * pi * t * (1 - frame)))
+sin(t) * (1 + 5 * sin(8 * pi * t * frame)) + 0.7 * tanh(6 * sin(16 * t))
+sin(2 * pi * t + 6 * frame * sin(16 * pi * t)) * exp(-4 * t * (1 - frame))
+sin(t) * (1 + frame * floor(sin(32 * pi * t))) + cos(8 * t) * (1 - frame)
+tanh(5 * sin(t + 4 * frame * sin(8 * pi * t))) + 0.7 * sin(16 * t)
+
+# Extreme Modulation
+sin(t) * (1 + 6 * sin(64 * pi * t * frame)) * exp(-16 * t * (1 - frame))
+sin(t) + sin(2 * t) * frame + sin(4 * t) * pow(frame, 2) + sin(8 * t) * pow(frame, 3)
+sin(2 * pi * t) * (1 + frame * sin(128 * pi * t)) + tanh(16 * sin(64 * t))
+sin(t) * pow(abs(cos(32 * pi * t)), frame) + sin(64 * t) * (1 - frame)
+tanh(10 * sin(t)) * frame + sin(t) * (1 + 8 * sin(32 * pi * t)) * (1 - frame)
+
+# Additional variations can be created by:
+# 1. Combining different equations with frame interpolation
+# 2. Adding more harmonics (sin(16*t), sin(32*t), etc.)
+# 3. Using different waveshaping functions (tanh, pow, sign)
+# 4. Modulating the phase with frame parameter
+# 5. Adding exponential decay for transient shaping

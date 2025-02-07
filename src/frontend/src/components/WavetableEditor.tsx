@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import './WavetableEditor.css';
 
 // Utility function to bound values between -1 and 1
@@ -38,18 +39,18 @@ const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
 
     const vertices: number[] = [];
     const colors: number[] = [];
-    const color = new THREE.Color('#ff4d4d');
+    const color = new THREE.Color('#ff3333');
     
-    // Create line segments for each frame
-    for (let i = 0; i < numFrames; i++) {
+    // Sample every 4th frame and every 4th point
+    for (let i = 0; i < numFrames; i += 4) {
       const frame = frames[i];
-      const z = (i / numFrames) * 2 - 1;
+      const z = (i / (numFrames - 1)) * 2 - 1;
       
-      for (let j = 0; j < frameSize - 1; j++) {
-        const x1 = (j / frameSize) * 2 - 1;
-        const x2 = ((j + 1) / frameSize) * 2 - 1;
+      for (let j = 0; j < frameSize - 4; j += 4) {
+        const x1 = (j / (frameSize - 1)) * 2 - 1;
+        const x2 = ((j + 4) / (frameSize - 1)) * 2 - 1;
         const y1 = boundValue(frame[j] * gain);
-        const y2 = boundValue(frame[j + 1] * gain);
+        const y2 = boundValue(frame[j + 4] * gain);
         
         vertices.push(x1, y1, z);
         vertices.push(x2, y2, z);
@@ -65,10 +66,82 @@ const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
     return geometry;
   }, [frames, gain]);
 
+  useEffect(() => {
+    if (!meshRef.current || !frames?.length) return;
+    
+    const numFrames = frames.length;
+    const frameSize = frames[0]?.length || 0;
+    if (!frameSize) return;
+
+    const vertices: number[] = [];
+    
+    // Sample every 4th frame and every 4th point
+    for (let i = 0; i < numFrames; i += 4) {
+      const frame = frames[i];
+      const z = (i / (numFrames - 1)) * 2 - 1;
+      
+      for (let j = 0; j < frameSize - 4; j += 4) {
+        const x1 = (j / (frameSize - 1)) * 2 - 1;
+        const x2 = ((j + 4) / (frameSize - 1)) * 2 - 1;
+        const y1 = boundValue(frame[j] * gain);
+        const y2 = boundValue(frame[j + 4] * gain);
+        
+        vertices.push(x1, y1, z);
+        vertices.push(x2, y2, z);
+      }
+    }
+
+    const positions = meshRef.current.geometry.attributes.position;
+    positions.array.set(vertices);
+    positions.needsUpdate = true;
+  }, [frames, gain]);
+
   return (
     <lineSegments ref={meshRef} geometry={geometry}>
-      <lineBasicMaterial color="#ff4d4d" transparent opacity={0.8} linewidth={2} />
+      <lineBasicMaterial 
+        color="#ff3333"
+        transparent
+        opacity={0.7}
+        linewidth={2.5}
+        toneMapped={false}
+      />
     </lineSegments>
+  );
+};
+
+// Simplified ThreeDView with stable camera
+const ThreeDView: React.FC<{ frames: number[][], gain: number }> = ({ frames, gain }) => {
+  return (
+    <div className="canvas-container" style={{ width: '100%', height: '400px' }}>
+      <Canvas 
+        camera={{ 
+          position: [2, 2, 2], 
+          fov: 45
+        }}
+        gl={{ 
+          antialias: true
+        }}
+      >
+        <color attach="background" args={['#1a1a1a']} />
+        <WaveformMesh frames={frames} gain={gain} />
+        <OrbitControls 
+          enableDamping={true}
+          dampingFactor={0.05}
+          rotateSpeed={0.5}
+        />
+        <gridHelper args={[2, 10, '#404040', '#303030']} />
+        <axesHelper args={[1]} />
+        
+        <EffectComposer>
+          <Bloom 
+            intensity={1.5}
+            luminanceThreshold={0.1}
+            luminanceSmoothing={0.9}
+            height={300}
+          />
+        </EffectComposer>
+      </Canvas>
+    </div>
   );
 };
 
@@ -83,6 +156,7 @@ const WavetableEditor: React.FC = () => {
   const [harmonicStrength, setHarmonicStrength] = useState<number>(0);
   const [gain, setGain] = useState<number>(1.0);
   const [isDraggingFormant, setIsDraggingFormant] = useState<boolean>(false);
+  const [isDraggingGain, setIsDraggingGain] = useState<boolean>(false);
   const [chaosParams, setChaosParams] = useState({
     sigma: 5,
     rho: 14,
@@ -171,28 +245,24 @@ const WavetableEditor: React.FC = () => {
 
   const updateVisualPreview = (strength: number) => {
     if (!waveformData || !originalWaveformRef.current) return;
-
-    // Get the original frames
-    const originalFrames = originalWaveformRef.current.frames;
-    const originalWaveform = originalWaveformRef.current.waveform;
-
-    // Apply preview effect
-    const previewFrame = previewFormantEffect(originalWaveform, strength);
-    const previewFrames = originalFrames.map(frame => 
-      previewFormantEffect(frame, strength)
+    
+    // Simple preview effect while dragging
+    const previewFrames = originalWaveformRef.current.frames.map(frame =>
+      frame.map(sample => {
+        const enhanced = sample * (1 + strength * 0.5);
+        return Math.max(-1, Math.min(1, enhanced));
+      })
     );
 
-    // Update canvas with preview
-    if (canvasRef.current) {
-      drawWaveform(canvasRef.current, previewFrame);
-    }
-
-    // Update state while preserving all other properties
     setWaveformData(prev => ({
       ...prev,
       frames: previewFrames,
-      waveform: previewFrame
+      waveform: previewFrames[0]
     }));
+
+    if (canvasRef.current) {
+      drawWaveform(canvasRef.current, previewFrames[0]);
+    }
   };
 
   const generateWaveform = async () => {
@@ -591,33 +661,6 @@ const WavetableEditor: React.FC = () => {
     </div>
   );
 
-  const ThreeDView: React.FC<{ frames: number[][], gain: number }> = ({ frames, gain }) => {
-    return (
-      <div className="canvas-container" style={{ width: '100%', height: '400px' }}>
-        <Canvas 
-          camera={{ 
-            position: [2, 2, 2], 
-            fov: 60,
-            near: 0.1,
-            far: 1000
-          }}
-        >
-          <color attach="background" args={['#1a1a1a']} />
-          <ambientLight intensity={0.5} />
-          <pointLight position={[10, 10, 10]} />
-          <WaveformMesh frames={frames} gain={gain} />
-          <OrbitControls 
-            enableDamping={true}
-            dampingFactor={0.05}
-            rotateSpeed={0.5}
-          />
-          <gridHelper args={[2, 20, '#404040', '#303030']} />
-          <axesHelper args={[1]} />
-        </Canvas>
-      </div>
-    );
-  };
-
   return (
     <div className="wavetable-editor">
       <div className="editor-header">
@@ -768,17 +811,6 @@ const WavetableEditor: React.FC = () => {
                       
                       // Always update preview immediately
                       updateVisualPreview(newStrength);
-                      
-                      // Only do actual processing if we're not dragging
-                      if (harmonicTimeoutRef.current) {
-                        clearTimeout(harmonicTimeoutRef.current);
-                      }
-                      
-                      if (!isDraggingFormant) {
-                        harmonicTimeoutRef.current = setTimeout(() => {
-                          enhanceHarmonics();
-                        }, 50); 
-                      }
                     }}
                   />
                   <span>{harmonicStrength.toFixed(2)}</span>
@@ -789,16 +821,13 @@ const WavetableEditor: React.FC = () => {
                   <input
                     id="gain"
                     type="range"
+                    value={gain}
                     min="0"
                     max="2"
                     step="0.01"
-                    value={gain}
                     onChange={(e) => {
                       const newGain = parseFloat(e.target.value);
                       setGain(newGain);
-                      if (canvasRef.current && waveformData) {
-                        drawWaveform(canvasRef.current, waveformData.waveform);
-                      }
                     }}
                   />
                   <span>{gain.toFixed(2)}</span>
