@@ -167,6 +167,43 @@ def enhance_harmonics(waveform, strength):
     
     return enhanced_waveform.tolist()
 
+def lorenz_wavefold(waveform, sigma=10, rho=28, beta=2.667, dt=0.01):
+    """
+    Apply Lorenz attractor-based chaotic wavefolding to a waveform.
+    
+    Args:
+        waveform: Input waveform (numpy array)
+        sigma, rho, beta: Parameters for Lorenz system
+        dt: Time step for the Lorenz system
+    Returns:
+        Folded waveform with chaotic modulation
+    """
+    # Convert input to numpy array if it's a list
+    waveform = np.array(waveform)
+    
+    # Initialize Lorenz system
+    x, y, z = 0.1, 0.1, 0.1
+    folded_wave = np.zeros_like(waveform)
+    
+    # Apply folding with Lorenz modulation
+    for i, s in enumerate(waveform):
+        # Update Lorenz system
+        dx = sigma * (y - x) * dt
+        dy = (x * (rho - z) - y) * dt
+        dz = (x * y - beta * z) * dt
+        x, y, z = x + dx, y + dy, z + dz
+        
+        # Use chaotic y-value to modulate fold threshold
+        fold_threshold = np.tanh(y)
+        folded_wave[i] = np.clip(s, -fold_threshold, fold_threshold)
+    
+    # Normalize the output
+    max_val = np.max(np.abs(folded_wave))
+    if max_val > 0:
+        folded_wave = folded_wave / max_val
+    
+    return folded_wave
+
 @app.route('/api/waveform/equation', methods=['POST'])
 def generate_from_equation():
     """Generate wavetable from equation."""
@@ -265,7 +302,7 @@ def enhance_waveform():
         
         if not frames:
             raise ValueError("No frame data provided")
-        
+            
         # Process each frame
         enhanced_frames = [enhance_harmonics(frame, strength) for frame in frames]
         
@@ -281,6 +318,37 @@ def enhance_waveform():
             'waveform': enhanced_frames[0],  # Return first frame for display
             'spectrum': np.abs(np.fft.rfft(enhanced_frames[0])).tolist()
         })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/waveform/chaos_fold', methods=['POST'])
+def apply_chaos_fold():
+    """Apply chaotic wavefolding to frames."""
+    try:
+        data = request.get_json()
+        frames = data.get('frames', [])
+        sigma = float(data.get('sigma', 10.0))
+        rho = float(data.get('rho', 28.0))
+        beta = float(data.get('beta', 2.667))
+        dt = float(data.get('dt', 0.01))
+        
+        if not frames:
+            raise ValueError("No frame data provided")
+            
+        # Process each frame with the chaos folder
+        folded_frames = [lorenz_wavefold(frame, sigma, rho, beta, dt).tolist() 
+                        for frame in frames]
+        
+        # Calculate spectrum for visualization
+        spectrum = np.abs(np.fft.rfft(folded_frames[0])).tolist()
+        
+        return jsonify({
+            'frames': folded_frames,
+            'waveform': folded_frames[0],
+            'spectrum': spectrum
+        })
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

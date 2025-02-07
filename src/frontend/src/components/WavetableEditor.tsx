@@ -78,6 +78,14 @@ const WavetableEditor: React.FC = () => {
   const [harmonicStrength, setHarmonicStrength] = useState<number>(0);
   const [gain, setGain] = useState<number>(1.0);
   const [isDraggingFormant, setIsDraggingFormant] = useState<boolean>(false);
+  const [chaosParams, setChaosParams] = useState({
+    sigma: 10,
+    rho: 28,
+    beta: 2.667,
+    dt: 0.01
+  });
+  const [isChaosEnabled, setIsChaosEnabled] = useState<boolean>(false);
+  
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const harmonicTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastEnhanceTime = useRef<number>(0);
@@ -286,6 +294,43 @@ const WavetableEditor: React.FC = () => {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while enhancing harmonics');
+    }
+  };
+
+  const applyChaosFolder = async () => {
+    if (!waveformData || !originalWaveformRef.current) return;
+
+    try {
+      const response = await fetch('http://localhost:8081/api/waveform/chaos_fold', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          frames: originalWaveformRef.current.frames,
+          ...chaosParams
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to apply chaos folder');
+      }
+
+      const foldedData = await response.json();
+      
+      setWaveformData(prev => ({
+        ...prev,
+        frames: foldedData.frames,
+        waveform: foldedData.frames[0],
+        spectrum: foldedData.spectrum
+      }));
+
+      if (canvasRef.current) {
+        drawWaveform(canvasRef.current, foldedData.frames[0]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while applying chaos folder');
     }
   };
 
@@ -574,6 +619,86 @@ const WavetableEditor: React.FC = () => {
               </div>
             </div>
           </>
+        )}
+      </div>
+      
+      <div className="chaos-controls" style={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
+        <h3>Chaos Wavefolder</h3>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={isChaosEnabled}
+              onChange={(e) => setIsChaosEnabled(e.target.checked)}
+            />
+            Enable Chaos
+          </label>
+          {isChaosEnabled && (
+            <button
+              onClick={applyChaosFolder}
+              className="generate-btn"
+              type="button"
+            >
+              Apply Chaos Fold
+            </button>
+          )}
+        </div>
+        
+        {isChaosEnabled && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+            <div>
+              <label htmlFor="sigma">Sigma:</label>
+              <input
+                id="sigma"
+                type="range"
+                min="1"
+                max="50"
+                step="0.1"
+                value={chaosParams.sigma}
+                onChange={(e) => setChaosParams(prev => ({ ...prev, sigma: parseFloat(e.target.value) }))}
+              />
+              <span>{chaosParams.sigma.toFixed(1)}</span>
+            </div>
+            <div>
+              <label htmlFor="rho">Rho:</label>
+              <input
+                id="rho"
+                type="range"
+                min="1"
+                max="100"
+                step="0.1"
+                value={chaosParams.rho}
+                onChange={(e) => setChaosParams(prev => ({ ...prev, rho: parseFloat(e.target.value) }))}
+              />
+              <span>{chaosParams.rho.toFixed(1)}</span>
+            </div>
+            <div>
+              <label htmlFor="beta">Beta:</label>
+              <input
+                id="beta"
+                type="range"
+                min="0.1"
+                max="10"
+                step="0.001"
+                value={chaosParams.beta}
+                onChange={(e) => setChaosParams(prev => ({ ...prev, beta: parseFloat(e.target.value) }))}
+              />
+              <span>{chaosParams.beta.toFixed(3)}</span>
+            </div>
+            <div>
+              <label htmlFor="dt">Time Step:</label>
+              <input
+                id="dt"
+                type="range"
+                min="0.001"
+                max="0.1"
+                step="0.001"
+                value={chaosParams.dt}
+                onChange={(e) => setChaosParams(prev => ({ ...prev, dt: parseFloat(e.target.value) }))}
+              />
+              <span>{chaosParams.dt.toFixed(3)}</span>
+            </div>
+          </div>
         )}
       </div>
     </div>
