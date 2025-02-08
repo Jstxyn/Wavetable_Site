@@ -523,5 +523,13 @@ def apply_chaos_fold():
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+# Add health check endpoint
+@app.route('/health')
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'message': 'Wavetable API is running'
+    })
+
 if __name__ == "__main__":
     app.run(host=host, port=port)
