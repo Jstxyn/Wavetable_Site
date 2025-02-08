@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import numpy as np
 from scipy import signal
@@ -11,6 +11,7 @@ from functools import wraps
 import base64
 from scipy import ndimage
 import cv2
+from effects.registry import registry
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +21,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Configure CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:5174"],
+        "methods": ["GET", "POST", "OPTIONS", "HEAD"],
+        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+        "expose_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+        "send_wildcard": False,
+        "max_age": 86400
+    }
+})
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5174')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
+    if 'Origin' in request.headers:
+        response.headers['Access-Control-Allow-Origin'] = request.headers['Origin']
+    return response
 
 def handle_errors(f):
     @wraps(f)
@@ -34,28 +59,6 @@ def handle_errors(f):
                 'details': traceback.format_exc()
             }), 500
     return wrapper
-
-# Configure CORS
-CORS(app, 
-     resources={r"/*": {
-         "origins": ["http://localhost:5173"],  # Vite's default dev server
-         "methods": ["GET", "POST", "OPTIONS"],
-         "allow_headers": ["Content-Type", "Authorization"],
-         "expose_headers": ["Content-Type", "Authorization"],
-         "supports_credentials": True,
-         "send_wildcard": False
-     }})
-
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    if origin and origin in ["http://localhost:5173"]:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        response.headers.add('Vary', 'Origin')
-    return response
 
 def generate_basic_waveform(waveform_type, num_samples=2048):
     """Generate a basic waveform."""
@@ -442,6 +445,49 @@ def enhance_waveform():
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/effects', methods=['GET'])
+def get_available_effects():
+    """Get all available effects and their parameters"""
+    try:
+        return jsonify(registry.get_all_effects())
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/effects/apply', methods=['POST'])
+def apply_effect():
+    """Apply an effect to a waveform"""
+    try:
+        data = request.json
+        if not data or 'effect' not in data or 'waveform' not in data:
+            return jsonify({'error': 'Missing required parameters'}), 400
+            
+        effect_name = data['effect']
+        waveform = np.array(data['waveform'])
+        params = data.get('parameters', {})
+        frames = data.get('frames', [])
+        
+        effect = registry.get_effect(effect_name)
+        
+        if frames:
+            frames = [np.array(frame) for frame in frames]
+            processed_frames = effect.process_frames(frames, params)
+            processed_frames = [frame.tolist() for frame in processed_frames]
+            return jsonify({
+                'frames': processed_frames,
+                'waveform': processed_frames[0] if processed_frames else []
+            })
+        else:
+            processed = effect.process(waveform, params)
+            return jsonify({
+                'waveform': processed.tolist(),
+                'frames': [processed.tolist()]
+            })
+            
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/waveform/chaos_fold', methods=['POST', 'OPTIONS'])
 @handle_errors
 def apply_chaos_fold():
@@ -508,7 +554,7 @@ def apply_chaos_fold():
                 processed_frames.append(optimize_array(folded, precision=4).tolist())
             
             # Calculate spectrum for visualization
-            spectrum = optimize_array(np.abs(np.fft.rfft(processed_frames[0])), precision=4).tolist()
+            spectrum = optimize_array(np.abs(np.fft.fft(processed_frames[0])), precision=4).tolist()
             
             # Prepare response
             response = {

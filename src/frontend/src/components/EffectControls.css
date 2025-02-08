@@ -1,0 +1,118 @@
+.effect-controls {
+  padding: 1.5rem;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-top: 1.5rem;
+}
+
+.effect-selector {
+  margin-bottom: 1.5rem;
+}
+
+.effect-selector label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.effect-selector select {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--background);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.parameter-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.parameter-control {
+  background: var(--background);
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.parameter-control label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: var(--text);
+}
+
+/* Custom slider styling */
+.parameter-control input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 5px;
+  background: #2a2a2a;
+  outline: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+/* Webkit (Chrome, Safari, Edge) */
+.parameter-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #ff4444;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+/* Firefox */
+.parameter-control input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: none;
+  border-radius: 50%;
+  background: #ff4444;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.parameter-control input[type="range"]:hover {
+  opacity: 1;
+}
+
+.parameter-control input[type="range"]::-webkit-slider-thumb:hover {
+  background: #ff6666;
+}
+
+.parameter-control input[type="range"]::-moz-range-thumb:hover {
+  background: #ff6666;
+}
+
+.parameter-control span {
+  font-family: monospace;
+  color: #ff4444;
+  min-width: 60px;
+  text-align: right;
+}
+
+.parameter-control small {
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  display: block;
+}
+
+.error-message {
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+}
