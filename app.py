@@ -7,15 +7,13 @@ import wave
 import struct
 
 app = Flask(__name__)
+# More permissive CORS configuration
 CORS(app, resources={
     r"/*": {
-        "origins": [
-            "http://localhost:5173",
-            "https://wavetable-site.vercel.app",
-            "https://*.vercel.app"  # Allow all Vercel preview deployments
-        ],
+        "origins": "*",  # Allow all origins during development
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+        "supports_credentials": True
     }
 })
 
