@@ -1,1 +1,1 @@
-web: cd src/backend && gunicorn app:app --bind 0.0.0.0:$PORT
+web: pip install -r requirements.txt && gunicorn app:app --bind 0.0.0.0:$PORT
