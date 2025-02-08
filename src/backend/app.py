@@ -18,10 +18,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*"],  # In production, you might want to restrict this
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Get port from environment variable for production
 port = int(os.environ.get("PORT", 8081))
+host = os.environ.get("HOST", "0.0.0.0")
 
 def handle_errors(f):
     @wraps(f)
@@ -517,4 +524,4 @@ def apply_chaos_fold():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=port)
+    app.run(host=host, port=port)
