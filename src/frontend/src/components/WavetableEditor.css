@@ -384,3 +384,155 @@
 .control-group input[type="range"]:disabled + label {
   opacity: 0.5;
 }
+
+.drop-zone {
+  width: 100%;
+  max-width: 800px;
+  height: 200px;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2rem 0;
+  transition: all 0.3s ease;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.drop-zone.dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.drop-zone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 2rem;
+}
+
+.drop-zone-content svg {
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.drop-zone.dragging .drop-zone-content {
+  color: var(--accent);
+}
+
+.drop-zone.dragging svg {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.drop-zone-sub {
+  font-size: 0.9em;
+  opacity: 0.7;
+}
+
+.image-input {
+  min-width: 200px;
+  flex: 1;
+}
+
+.compact-drop-zone {
+  height: 38px;
+  border: 2px dashed var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  background: var(--surface);
+  cursor: pointer;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.compact-drop-zone:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.compact-drop-zone.dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.compact-drop-zone.loading {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  pointer-events: none;
+}
+
+.compact-drop-zone.loading .compact-drop-content {
+  color: var(--accent);
+}
+
+.compact-drop-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-dim);
+  font-size: 0.9em;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact-drop-content span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact-drop-zone.dragging .compact-drop-content {
+  color: var(--accent);
+}
+
+.compact-drop-zone svg {
+  color: var(--text-dim);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.compact-drop-zone.dragging svg {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.image-options {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.option-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.option-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.error-message {
+  color: #ff4444;
+  margin-top: 8px;
+  font-size: 0.9em;
+  text-align: center;
+  padding: 8px;
+  background: rgba(255, 68, 68, 0.1);
+  border-radius: 4px;
+}

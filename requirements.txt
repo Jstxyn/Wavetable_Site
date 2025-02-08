@@ -1,8 +1,11 @@
-flask>=2.0.0
-numpy>=1.21.0
-scipy>=1.7.0
-python-dotenv>=0.19.0
-flask-cors>=3.0.10
+Flask==2.0.1
+Werkzeug==2.0.3
+flask-cors==3.0.10
+numpy==1.24.3
+scipy==1.11.3
 soundfile>=0.10.3
 matplotlib>=3.4.0
 sympy>=1.8.0  # For equation parsing
+opencv-python-headless==4.11.0.86
+python-dotenv>=0.19.0
+Pillow==10.0.0

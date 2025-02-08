@@ -8,6 +8,9 @@ import struct
 from flask import send_file
 import traceback
 from functools import wraps
+import base64
+from scipy import ndimage
+import cv2
 
 # Configure logging
 logging.basicConfig(
@@ -532,6 +535,78 @@ def apply_chaos_fold():
         logger.error(f"Unexpected error in apply_chaos_fold: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/waveform/image', methods=['POST'])
+def image_to_wavetable():
+    try:
+        data = request.json
+        if not data or 'image' not in data:
+            return jsonify({'error': 'No image data provided'}), 400
+            
+        image_data = data.get('image')
+        if not image_data.startswith('data:image/'):
+            return jsonify({'error': 'Invalid image data format'}), 400
+            
+        # Extract the base64 data after the comma
+        image_data = image_data.split(',', 1)[1]
+        
+        try:
+            # Decode image data
+            image_bytes = base64.b64decode(image_data)
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            
+            # Use OpenCV to decode image
+            img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+            
+            if img is None:
+                return jsonify({'error': 'Failed to decode image'}), 400
+                
+            # Log the original image shape
+            logger.info(f"Original image shape: {img.shape}")
+                
+            # Resize to 2048x256 (OKWT's dimensions)
+            img = cv2.resize(img, (2048, 256), interpolation=cv2.INTER_LINEAR)
+            
+            # Log the resized image shape
+            logger.info(f"Resized image shape: {img.shape}")
+            
+            # Convert to float and normalize to [-1, 1]
+            frames = []
+            
+            # Process each row as a frame
+            for row in img:
+                # Convert to float32 for better precision
+                frame = row.astype(np.float32)
+                # Normalize to [-1, 1] range
+                frame = (frame / 127.5) - 1.0
+                frames.append(frame.tolist())
+            
+            # Log the number of frames and frame size
+            logger.info(f"Number of frames: {len(frames)}")
+            logger.info(f"Frame size: {len(frames[0]) if frames else 0}")
+            
+            # Calculate spectrum for visualization
+            spectrum = np.abs(np.fft.fft(frames[0]))
+            spectrum = spectrum[:len(spectrum)//2].tolist()
+            
+            return jsonify({
+                'waveform': frames[0],
+                'frames': frames,
+                'spectrum': spectrum,
+                'frame_size': len(frames[0]),
+                'num_frames': len(frames),
+                'type': 'image'
+            })
+            
+        except Exception as e:
+            logger.error(f"Image processing error: {str(e)}")
+            logger.error(traceback.format_exc())
+            return jsonify({'error': f'Failed to process image: {str(e)}'}), 400
+            
+    except Exception as e:
+        logger.error(f"Request handling error: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, port=8081, host='0.0.0.0')
