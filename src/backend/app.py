@@ -1,13 +1,14 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import numpy as np
-from scipy import signal
+import os
 import logging
 import io
 import struct
 from flask import send_file
 import traceback
 from functools import wraps
+import scipy.signal
 
 # Configure logging
 logging.basicConfig(
@@ -17,6 +18,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app)
+
+# Get port from environment variable for production
+port = int(os.environ.get("PORT", 8081))
 
 def handle_errors(f):
     @wraps(f)
@@ -31,28 +36,6 @@ def handle_errors(f):
                 'details': traceback.format_exc()
             }), 500
     return wrapper
-
-# Configure CORS
-CORS(app, 
-     resources={r"/*": {
-         "origins": ["http://localhost:5173"],  # Vite's default dev server
-         "methods": ["GET", "POST", "OPTIONS"],
-         "allow_headers": ["Content-Type", "Authorization"],
-         "expose_headers": ["Content-Type", "Authorization"],
-         "supports_credentials": True,
-         "send_wildcard": False
-     }})
-
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    if origin and origin in ["http://localhost:5173"]:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        response.headers.add('Vary', 'Origin')
-    return response
 
 def generate_basic_waveform(waveform_type, num_samples=2048):
     """Generate a basic waveform."""
@@ -533,5 +516,5 @@ def apply_chaos_fold():
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True, port=8081, host='0.0.0.0')
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=port)
