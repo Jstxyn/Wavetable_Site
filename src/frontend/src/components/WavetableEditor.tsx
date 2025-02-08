@@ -177,20 +177,14 @@ const WavetableEditor: React.FC = () => {
 
   const fetchWithCredentials = async (url: string, options: RequestInit = {}) => {
     const defaultOptions: RequestInit = {
-      credentials: 'include',
+      mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
-      },
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...(options.headers || {})
       }
     };
 
-    const response = await fetch(url, defaultOptions);
+    const response = await fetch(url, { ...defaultOptions, ...options });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
       throw new Error(errorData.error || `Server error: ${response.status}`);
