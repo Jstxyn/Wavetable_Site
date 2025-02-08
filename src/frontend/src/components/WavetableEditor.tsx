@@ -173,7 +173,7 @@ const WavetableEditor: React.FC = () => {
   const originalWaveformRef = useRef<WaveformData | null>(null);
   const lastValidWaveformRef = useRef<WaveformData | null>(null);
 
-  const API_BASE = 'http://localhost:8081';
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081';
 
   const fetchWithCredentials = async (url: string, options: RequestInit = {}) => {
     const defaultOptions: RequestInit = {
