@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { EffectManager } from '../effects/EffectManager';
 import { EffectControls } from './EffectControls';
 import ThreeDView from './ThreeDView';
+import DragDropUpload from './DragDropUpload';
 import './WavetableEditor.css';
 
 // Utility function to bound values between -1 and 1
@@ -356,54 +357,18 @@ const WavetableEditor: React.FC = () => {
               </div>
             </label>
           </div>
-          
-          <div className="input-group image-input">
-            <label title="Import an image to create a wavetable from its brightness values">
-              Image Import:
-              <div 
-                className={`compact-drop-zone ${loading ? 'loading' : ''}`}
-                onDragOver={(e) => e.preventDefault()}
-                onDragLeave={(e) => e.preventDefault()}
-                onClick={() => fileInputRef.current?.click()}
-                role="button"
-                tabIndex={0}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    fileInputRef.current?.click();
-                  }
-                }}
-              >
-                <div className="compact-drop-content">
-                  {loading ? (
-                    <span>Processing image...</span>
-                  ) : (
-                    <>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M21 15V16.2C21 17.8802 21 18.7202 20.673 19.362C20.3854 19.9265 19.9265 20.3854 19.362 20.673C18.7202 21 17.8802 21 16.2 21H7.8C6.11984 21 5.27976 21 4.63803 20.673C4.07354 20.3854 3.6146 19.9265 3.32698 19.362C3 18.7202 3 17.8802 3 16.2V15M17 8L12 3M12 3L7 8M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                      <span>{selectedFileName || 'Click or drop image'}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  setSelectedFileName(file.name);
-                  handleImageUpload(file);
-                }
-              }}
-              style={{ display: 'none' }}
-            />
-          </div>
         </div>
 
         <div className="control-section">
+          <div className="upload-section">
+            <DragDropUpload
+              onFileUpload={handleImageUpload}
+              isUploading={isProcessing}
+              accept="image/*"
+              maxSize={5 * 1024 * 1024} // 5MB
+            />
+          </div>
+
           <div className="control-buttons">
             <div className="preset-buttons" role="group" aria-label="Basic waveform presets">
               {[

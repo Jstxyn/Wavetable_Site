@@ -82,7 +82,7 @@
 }
 
 .image-input {
-  flex: 2;
+  display: none;
 }
 
 .generate-btn {
@@ -334,6 +334,12 @@
 
 .loading .compact-drop-content {
   color: #ff4444;
+}
+
+.upload-section {
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0 1rem;
 }
 
 /* Tooltip styles */
