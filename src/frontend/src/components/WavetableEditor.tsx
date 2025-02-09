@@ -270,6 +270,54 @@ const WavetableEditor: React.FC = () => {
     }
   };
 
+  const handleImageUpload = async (file: File) => {
+    try {
+      setError('');
+      setIsProcessing(true);
+      
+      // Convert the file to base64
+      const reader = new FileReader();
+      
+      const imageData = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const response = await fetchWithCredentials(`${API_BASE}/api/waveform/image`, {
+        method: 'POST',
+        body: JSON.stringify({ image: imageData }),
+      });
+
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      setWaveformData(data);
+      setFrames(data.frames);
+
+      if (canvasRef.current) {
+        drawWaveform(canvasRef.current, data.waveform);
+      }
+      
+      // Store original waveform for effects
+      originalWaveformRef.current = {
+        ...data,
+        frames: data.frames.map(frame => [...frame]),
+        waveform: [...data.waveform],
+        type: 'image'
+      };
+      
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process image');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Generate initial waveform on mount
   useEffect(() => {
     handleBasicWaveform('sine');

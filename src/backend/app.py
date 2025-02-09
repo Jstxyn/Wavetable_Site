@@ -610,49 +610,45 @@ def image_to_wavetable():
             # Log the original image shape
             logger.info(f"Original image shape: {img.shape}")
                 
-            # Resize to 2048x256 (OKWT's dimensions)
+            # Resize to 2048x256 (standard wavetable dimensions)
             img = cv2.resize(img, (2048, 256), interpolation=cv2.INTER_LINEAR)
             
             # Log the resized image shape
             logger.info(f"Resized image shape: {img.shape}")
             
             # Convert to float and normalize to [-1, 1]
+            img = img.astype(np.float32) / 127.5 - 1.0
+            
+            # Create frames (each column becomes a frame)
             frames = []
+            for i in range(img.shape[1]):
+                frames.append(img[:, i].tolist())
             
-            # Process each row as a frame
-            for row in img:
-                # Convert to float32 for better precision
-                frame = row.astype(np.float32)
-                # Normalize to [-1, 1] range
-                frame = (frame / 127.5) - 1.0
-                frames.append(frame.tolist())
+            # Create the waveform data (first frame)
+            waveform = frames[0]
             
-            # Log the number of frames and frame size
-            logger.info(f"Number of frames: {len(frames)}")
-            logger.info(f"Frame size: {len(frames[0]) if frames else 0}")
-            
-            # Calculate spectrum for visualization
-            spectrum = np.abs(np.fft.fft(frames[0]))
-            spectrum = spectrum[:len(spectrum)//2].tolist()
+            # Optimize arrays for transmission
+            frames = optimize_array(frames)
+            waveform = optimize_array(waveform)
             
             return jsonify({
-                'waveform': frames[0],
+                'waveform': waveform,
                 'frames': frames,
-                'spectrum': spectrum,
                 'frame_size': len(frames[0]),
                 'num_frames': len(frames),
-                'type': 'image'
+                'type': 'image',
+                'spectrum': []  # Empty spectrum for now
             })
             
         except Exception as e:
-            logger.error(f"Image processing error: {str(e)}")
+            logger.error(f"Error processing image: {str(e)}")
             logger.error(traceback.format_exc())
-            return jsonify({'error': f'Failed to process image: {str(e)}'}), 400
+            return jsonify({'error': 'Failed to process image data'}), 400
             
     except Exception as e:
-        logger.error(f"Request handling error: {str(e)}")
+        logger.error(f"Error in image_to_wavetable: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=8081, host='0.0.0.0')
