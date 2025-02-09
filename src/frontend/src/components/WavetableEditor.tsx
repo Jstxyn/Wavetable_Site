@@ -179,19 +179,22 @@ const WavetableEditor: React.FC = () => {
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Set up drawing style
+    // Set up drawing style with thinner line
     ctx.strokeStyle = '#ff4444';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1;
 
     // Draw the waveform
     ctx.beginPath();
     const stepX = canvas.width / waveform.length;
     const centerY = canvas.height / 2;
-    const scaleY = canvas.height / 2;
+    // Use 80% of half height for better visibility and to prevent crossing
+    const scaleY = (canvas.height / 2) * 0.8;
 
     waveform.forEach((value, index) => {
       const x = index * stepX;
-      const y = centerY + value * scaleY;
+      // Ensure value is bounded between -1 and 1 before scaling
+      const boundedValue = Math.max(-1, Math.min(1, value));
+      const y = centerY + boundedValue * scaleY;
       if (index === 0) {
         ctx.moveTo(x, y);
       } else {
