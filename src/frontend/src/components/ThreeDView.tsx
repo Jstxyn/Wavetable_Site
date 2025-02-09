@@ -27,20 +27,17 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
   const points = useMemo(() => {
     if (!frames || frames.length === 0) return [];
 
-    const frameCount = frames.length;           // Number of frames in the wavetable
-    const samplesPerFrame = frames[0].length;   // Number of samples in each frame
+    const frameCount = frames.length;
+    const samplesPerFrame = frames[0].length;
     const vertices: THREE.Vector3[] = [];
 
     // Create points for each sample in each frame
     for (let i = 0; i < frameCount; i++) {
       const frame = frames[i];
-      // X position is normalized between -1 and 1 across all frames
       const x = (i / frameCount) * 2 - 1;
 
       for (let j = 0; j < samplesPerFrame; j++) {
-        // Y position is the amplitude value multiplied by gain
         const y = frame[j] * gain;
-        // Z position is normalized between -1 and 1 across all samples in a frame
         const z = (j / samplesPerFrame) * 2 - 1;
         vertices.push(new THREE.Vector3(x, y, z));
       }
@@ -49,7 +46,7 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
     return vertices;
   }, [frames, gain]);
 
-  // Create the line geometry that forms the grid-like structure
+  // Create the line geometry that forms the waveform
   const lineGeometry = useMemo(() => {
     if (points.length === 0) return null;
 
@@ -57,22 +54,50 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
     const samplesPerFrame = frames[0].length;
     const lines: THREE.Vector3[][] = [];
 
-    // HORIZONTAL LINES: These create the waveform shape within each frame
-    // These lines go along the Z axis (left to right in the view)
-    for (let i = 0; i < frameCount; i++) {
+    // Sample every tenth frame for significantly reduced density
+    for (let i = 0; i < frameCount; i += 10) {
       const framePoints: THREE.Vector3[] = [];
-      for (let j = 0; j < samplesPerFrame; j++) {
-        // Get point at current frame (i) and sample position (j)
+      // Sample every tenth point within each frame
+      for (let j = 0; j < samplesPerFrame; j += 10) {
         framePoints.push(points[i * samplesPerFrame + j]);
       }
       lines.push(framePoints);
     }
 
-    // We've removed the vertical connecting lines to eliminate the grid effect
     return lines;
   }, [points, frames]);
 
-  // Update controls on each frame
+  // Custom shader material for the glowing effect
+  const glowMaterial = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        color: { value: new THREE.Color("#ff4444") },
+        glowColor: { value: new THREE.Color("#ff8888") },
+        glowIntensity: { value: 2.2 } // Increased glow intensity for better visibility with fewer lines
+      },
+      vertexShader: `
+        varying vec3 vPosition;
+        void main() {
+          vPosition = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 color;
+        uniform vec3 glowColor;
+        uniform float glowIntensity;
+        varying vec3 vPosition;
+        
+        void main() {
+          float glow = length(vPosition) * glowIntensity;
+          vec3 finalColor = mix(color, glowColor, glow);
+          gl_FragColor = vec4(finalColor, 1.0);
+        }
+      `,
+      transparent: true,
+    });
+  }, []);
+
   useFrame(() => {
     if (controlsRef.current) {
       controlsRef.current.update();
@@ -81,7 +106,6 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
 
   return (
     <>
-      {/* Set up the camera and controls */}
       <PerspectiveCamera makeDefault position={[0, 2, 4]} />
       <OrbitControls 
         ref={controlsRef} 
@@ -89,18 +113,17 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
         dampingFactor={0.1} 
       />
       
-      {/* Add lighting */}
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1} />
       
-      {/* Render all lines */}
       {lineGeometry && lineGeometry.map((line, index) => (
         <Line
           key={index}
           points={line}
           color="#ff4444"
-          lineWidth={1}
+          lineWidth={5}  // Increased line width to make fewer lines more visible
           dashed={false}
+          material={glowMaterial}
         />
       ))}
     </>
