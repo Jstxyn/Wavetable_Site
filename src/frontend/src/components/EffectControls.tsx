@@ -5,11 +5,13 @@ import './EffectControls.css';
 interface EffectControlsProps {
   effectManager: EffectManager;
   onEffectChange: (effectName: string, parameters: Record<string, any>) => void;
+  isProcessing?: boolean;
 }
 
 export const EffectControls: React.FC<EffectControlsProps> = ({
   effectManager,
   onEffectChange,
+  isProcessing = false
 }) => {
   const [effects, setEffects] = useState<EffectRegistry>({});
   const [selectedEffect, setSelectedEffect] = useState<string>('');
@@ -107,6 +109,7 @@ export const EffectControls: React.FC<EffectControlsProps> = ({
               </option>
             ))}
           </select>
+          {isProcessing && <span className="effect-processing">Processing...</span>}
         </label>
       </div>
 

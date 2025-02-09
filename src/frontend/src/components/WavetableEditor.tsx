@@ -90,6 +90,7 @@ const WavetableEditor: React.FC = () => {
   const [isChaosEnabled, setIsChaosEnabled] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [is3D, setIs3D] = useState<boolean>(false);
+  const [isEffectProcessing, setIsEffectProcessing] = useState<boolean>(false);
   const effectManager = useRef(new EffectManager()).current;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -209,6 +210,7 @@ const WavetableEditor: React.FC = () => {
     if (!waveformData) return;
 
     try {
+      setIsEffectProcessing(true);
       const result = await effectManager.applyEffect(
         effectName,
         waveformData.waveform,
@@ -228,6 +230,8 @@ const WavetableEditor: React.FC = () => {
     } catch (error) {
       console.error('Failed to apply effect:', error);
       setError(error instanceof Error ? error.message : 'Failed to apply effect');
+    } finally {
+      setIsEffectProcessing(false);
     }
   };
 
@@ -449,6 +453,7 @@ const WavetableEditor: React.FC = () => {
           <EffectControls
             effectManager={effectManager}
             onEffectChange={handleEffectChange}
+            isProcessing={isEffectProcessing}
           />
         </div>
       </div>
