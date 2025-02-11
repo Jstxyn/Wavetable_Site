@@ -64,6 +64,8 @@ export class EffectManager {
     private computeCache: Map<string, { params: Record<string, number>, result: number[] }> = new Map();
     /** Debounce timers for parameter updates */
     private updateTimers: Map<string, number> = new Map();
+    private activeRequests: Map<string, AbortController> = new Map();
+    private lastValidWaveform: Map<string, number[]> = new Map();
 
     constructor() {
         // Initialize with default effects
@@ -207,11 +209,14 @@ export class EffectManager {
         if (timer) {
             window.clearTimeout(timer);
         }
+        
+        // Use a longer debounce time for complex effects
+        const debounceTime = effectId === 'chaosFold' ? 250 : 50;
+        
         this.updateTimers.set(effectId, window.setTimeout(() => {
             this.updateTimers.delete(effectId);
-            // Notify listeners that parameters have changed
             this.onParametersChanged(effectId);
-        }, 50)); // 50ms debounce
+        }, debounceTime));
     }
 
     /**
@@ -320,9 +325,22 @@ export class EffectManager {
                         continue;
                     }
 
-                    // Create AbortController for timeout
+                    // Cancel any existing request for this effect
+                    const existingController = this.activeRequests.get(effect.id);
+                    if (existingController) {
+                        existingController.abort();
+                        this.activeRequests.delete(effect.id);
+                    }
+
+                    // Create new AbortController
                     const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 5000);
+                    this.activeRequests.set(effect.id, controller);
+
+                    // Set a longer timeout for complex effects
+                    const timeout = setTimeout(
+                        () => controller.abort(),
+                        effect.id === 'chaosFold' ? 10000 : 5000
+                    );
 
                     const response = await fetch(`${API_BASE}/api/effects/apply`, {
                         method: 'POST',
@@ -338,6 +356,7 @@ export class EffectManager {
                     });
 
                     clearTimeout(timeout);
+                    this.activeRequests.delete(effect.id);
 
                     if (!response.ok) {
                         const error = await response.json();
@@ -353,6 +372,9 @@ export class EffectManager {
                     if (!Array.isArray(result.waveform)) {
                         throw new Error('Invalid waveform data received');
                     }
+
+                    // Store last valid waveform
+                    this.lastValidWaveform.set(effect.id, [...result.waveform]);
 
                     // Cache the result
                     this.computeCache.set(cacheKey, {
@@ -376,20 +398,32 @@ export class EffectManager {
                 } catch (error) {
                     console.error(`Error applying ${effect.id}:`, error);
                     
+                    // If request was aborted and we have a last valid waveform, use it
+                    if (error instanceof DOMException && error.name === 'AbortError' && 
+                        this.lastValidWaveform.has(effect.id)) {
+                        processedData = [...this.lastValidWaveform.get(effect.id)!];
+                        continue;
+                    }
+                    
                     // Notify listeners of processing error
                     const event = new CustomEvent('effect-processing-error', {
                         detail: { 
                             effectId: effect.id,
-                            error: error instanceof Error ? error.message : 'Unknown error'
+                            error: error instanceof Error ? error.message : 'Unknown error',
+                            recoverable: error instanceof DOMException && error.name === 'AbortError'
                         }
                     });
                     window.dispatchEvent(event);
                     
-                    // Clear cache on error
-                    this.clearComputeCache(effect.id);
+                    // Clear cache on error (but not for AbortError)
+                    if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                        this.clearComputeCache(effect.id);
+                    }
                     
-                    // Re-throw error for proper error handling
-                    throw error;
+                    // Only re-throw if not an abort error
+                    if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                        throw error;
+                    }
                 }
             }
         }

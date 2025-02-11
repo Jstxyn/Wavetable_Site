@@ -1,73 +1,79 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+/**
+ * File: useSliderInteraction.ts
+ * Purpose: Custom hook for handling slider interactions with debouncing
+ * Date: 2025-02-11
+ */
 
-interface SliderOptions {
-    onChange: (value: number) => void;
-    debounceTime?: number;
-    disabled?: boolean;
+import { useCallback, useRef } from 'react';
+import debounce from 'lodash/debounce';
+
+interface UseSliderInteractionProps {
+  onChange: (value: number) => void;
+  debounceTime?: number;
+  disabled?: boolean;
 }
 
-export function useSliderInteraction({ onChange, debounceTime = 16, disabled = false }: SliderOptions) {
-    const [isDragging, setIsDragging] = useState(false);
-    const timeoutRef = useRef<number | null>(null);
-    const valueRef = useRef<number | null>(null);
+export const useSliderInteraction = ({
+  onChange,
+  debounceTime = 100,
+  disabled = false
+}: UseSliderInteractionProps) => {
+  const isDragging = useRef(false);
+  const abortController = useRef<AbortController | null>(null);
 
-    const clearPendingTimeout = useCallback(() => {
-        if (timeoutRef.current !== null) {
-            window.clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
+  // Create a debounced change handler
+  const debouncedChange = useCallback(
+    debounce((value: number) => {
+      if (disabled || !isDragging.current) return;
+
+      // Cancel any pending requests
+      if (abortController.current) {
+        abortController.current.abort();
+      }
+
+      // Create new abort controller for this request
+      abortController.current = new AbortController();
+
+      // Call onChange with the new value
+      try {
+        onChange(value);
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error in slider interaction:', error);
         }
-    }, []);
+      }
+    }, debounceTime),
+    [onChange, disabled, debounceTime]
+  );
 
-    const handleChange = useCallback((value: number) => {
-        if (disabled) return;
-        
-        // Store the latest value
-        valueRef.current = value;
+  const handleChange = useCallback((value: number) => {
+    if (!disabled) {
+      debouncedChange(value);
+    }
+  }, [disabled, debouncedChange]);
 
-        // Clear any pending timeouts
-        clearPendingTimeout();
+  const handleDragStart = useCallback(() => {
+    isDragging.current = true;
+  }, []);
 
-        // If dragging, debounce the update
-        if (isDragging) {
-            timeoutRef.current = window.setTimeout(() => {
-                if (valueRef.current !== null) {
-                    onChange(valueRef.current);
-                }
-            }, debounceTime);
-        } else {
-            // If not dragging, update immediately
-            onChange(value);
-        }
-    }, [onChange, isDragging, debounceTime, disabled, clearPendingTimeout]);
+  const handleDragEnd = useCallback(() => {
+    isDragging.current = false;
+    
+    // Clean up any pending requests
+    if (abortController.current) {
+      abortController.current.abort();
+      abortController.current = null;
+    }
+    
+    // Cancel any pending debounced calls
+    debouncedChange.cancel();
+  }, [debouncedChange]);
 
-    const handleDragStart = useCallback(() => {
-        if (!disabled) {
-            setIsDragging(true);
-        }
-    }, [disabled]);
+  return {
+    handleChange,
+    handleDragStart,
+    handleDragEnd
+  };
+};
 
-    const handleDragEnd = useCallback(() => {
-        if (!disabled) {
-            setIsDragging(false);
-            // Ensure the final value is applied
-            if (valueRef.current !== null) {
-                clearPendingTimeout();
-                onChange(valueRef.current);
-            }
-        }
-    }, [disabled, onChange, clearPendingTimeout]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            clearPendingTimeout();
-        };
-    }, [clearPendingTimeout]);
-
-    return {
-        handleChange,
-        handleDragStart,
-        handleDragEnd,
-        isDragging
-    };
-}
+export default useSliderInteraction;

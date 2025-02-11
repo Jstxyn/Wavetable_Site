@@ -149,91 +149,95 @@ class ChaosFoldEffect(WaveEffect):
             if cache_key in cache:
                 return cache[cache_key].copy()
 
-            # Convert to float32 for processing
+            # Convert to float32 and normalize for processing
             waveform = np.asarray(waveform, dtype=np.float32)
-            
-            # Normalize input to prevent instability
             max_abs = np.max(np.abs(waveform))
             if max_abs < 1e-6:
                 return np.zeros_like(waveform, dtype=np.float32)
                 
             waveform_norm = waveform / max_abs
 
-            # Initialize Lorenz system with stable initial conditions
+            # Process in chunks for better performance
+            chunk_size = min(1024, len(waveform))
+            num_chunks = (len(waveform) + chunk_size - 1) // chunk_size
+            
             x = np.zeros_like(waveform_norm)
             y = np.zeros_like(waveform_norm)
             z = np.zeros_like(waveform_norm)
             
+            # Initialize first chunk
             x[0] = waveform_norm[0]
             y[0] = 0.0
-            z[0] = 20.0  # Initial z offset
+            z[0] = 20.0
             
-            # Generate Lorenz attractor trajectory
-            for i in range(1, len(waveform)):
-                dx = params['sigma'] * (y[i-1] - x[i-1])
-                dy = x[i-1] * (params['rho'] - z[i-1]) - y[i-1]
-                dz = x[i-1] * y[i-1] - params['beta'] * z[i-1]
+            # Process each chunk
+            for chunk in range(num_chunks):
+                start = chunk * chunk_size
+                end = min((chunk + 1) * chunk_size, len(waveform))
                 
-                x[i] = x[i-1] + dx * params['timeStep']
-                y[i] = y[i-1] + dy * params['timeStep']
-                z[i] = z[i-1] + dz * params['timeStep']
+                # Generate Lorenz attractor trajectory for this chunk
+                for i in range(max(1, start), end):
+                    dx = params['sigma'] * (y[i-1] - x[i-1])
+                    dy = x[i-1] * (params['rho'] - z[i-1]) - y[i-1]
+                    dz = x[i-1] * y[i-1] - params['beta'] * z[i-1]
+                    
+                    x[i] = x[i-1] + dx * params['timeStep']
+                    y[i] = y[i-1] + dy * params['timeStep']
+                    z[i] = z[i-1] + dz * params['timeStep']
             
-            # Normalize trajectories
-            x = x / np.max(np.abs(x)) if np.max(np.abs(x)) > 0 else x
-            y = y / np.max(np.abs(y)) if np.max(np.abs(y)) > 0 else y
-            z = z / np.max(np.abs(z)) if np.max(np.abs(z)) > 0 else z
+            # Normalize trajectories using vectorized operations
+            for arr in [x, y, z]:
+                max_val = np.max(np.abs(arr))
+                if max_val > 0:
+                    arr /= max_val
             
-            # Apply folding and modulation
-            folded = np.zeros_like(waveform_norm)
+            # Apply folding and modulation using vectorized operations
+            combined = waveform_norm + (x * 0.3 + y * 0.3 + z * 0.4) * params['complexity']
             threshold = 1.0 + params['complexity'] * 2.0
             
-            for i in range(len(waveform)):
-                # Combine input with Lorenz trajectory
-                value = waveform_norm[i] + (x[i] * 0.3 + y[i] * 0.3 + z[i] * 0.4) * params['complexity']
-                
-                # Apply folding
-                while np.abs(value) > threshold:
-                    if value > threshold:
-                        value = 2 * threshold - value
-                    elif value < -threshold:
-                        value = -2 * threshold - value
-                
-                # Apply fold symmetry
-                if params['foldSymmetry'] != 0.5:
-                    if value > 0:
-                        value *= (1.0 + (params['foldSymmetry'] - 0.5))
-                    else:
-                        value *= (1.0 + (0.5 - params['foldSymmetry']))
-                
-                # Apply LFO modulation
-                if params['lfoAmount'] > 0:
-                    phase = 2 * np.pi * i / len(waveform)
-                    lfo = np.sin(phase) * params['lfoAmount']
-                    value *= (1.0 + lfo)
-                
-                folded[i] = value
+            # Vectorized folding
+            folded = combined.copy()
+            while np.any(np.abs(folded) > threshold):
+                mask_high = folded > threshold
+                mask_low = folded < -threshold
+                folded[mask_high] = 2 * threshold - folded[mask_high]
+                folded[mask_low] = -2 * threshold - folded[mask_low]
+            
+            # Apply fold symmetry
+            if params['foldSymmetry'] != 0.5:
+                pos_mask = folded > 0
+                neg_mask = ~pos_mask
+                folded[pos_mask] *= (1.0 + (params['foldSymmetry'] - 0.5))
+                folded[neg_mask] *= (1.0 + (0.5 - params['foldSymmetry']))
+            
+            # Apply LFO modulation
+            if params['lfoAmount'] > 0:
+                phase = 2 * np.pi * np.arange(len(waveform)) / len(waveform)
+                lfo = np.sin(phase) * params['lfoAmount']
+                folded *= (1.0 + lfo)
             
             # Normalize folded output
-            folded = folded / np.max(np.abs(folded)) if np.max(np.abs(folded)) > 0 else folded
+            max_folded = np.max(np.abs(folded))
+            if max_folded > 0:
+                folded /= max_folded
             
             # Mix dry and wet signals
             result = (1 - params['mix']) * waveform_norm + params['mix'] * folded
             
-            # Restore original amplitude
+            # Restore original amplitude and validate
             result = result * max_abs
             
-            # Final validation
             if np.any(np.isnan(result)) or np.any(np.isinf(result)):
                 logger.error("Invalid values in output, returning input")
                 return waveform
             
-            # Cache result
+            # Cache result with size limit
             result = result.astype(np.float32)
             cache[cache_key] = result.copy()
             
-            # Limit cache size
-            if len(cache) > 1000:
-                cache.pop(next(iter(cache)))
+            if len(cache) > 100:  # Reduced cache size
+                oldest_key = next(iter(cache))
+                cache.pop(oldest_key)
             
             return result
             
