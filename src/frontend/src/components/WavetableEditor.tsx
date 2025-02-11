@@ -91,6 +91,7 @@ const WavetableEditor: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [is3D, setIs3D] = useState<boolean>(false);
   const [isEffectProcessing, setIsEffectProcessing] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
   const effectManager = useRef(new EffectManager()).current;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -275,30 +276,20 @@ const WavetableEditor: React.FC = () => {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const dropZone = document.querySelector('.compact-drop-zone');
-    if (dropZone) {
-      dropZone.classList.add('dragging');
-    }
+    setIsDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const dropZone = document.querySelector('.compact-drop-zone');
-    if (dropZone) {
-      dropZone.classList.remove('dragging');
-    }
+    setIsDragging(false);
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragging(false);
     
-    const dropZone = document.querySelector('.compact-drop-zone');
-    if (dropZone) {
-      dropZone.classList.remove('dragging');
-    }
-
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       const file = files[0]; // Take only the first file
@@ -383,146 +374,142 @@ const WavetableEditor: React.FC = () => {
       </div>
 
       <div className="input-section">
-        <div className="input-row">
-          <div className="equation-input">
-            <label title="Enter a mathematical equation using 't' as the time variable">
-              Equation:
-              <div className="input-wrapper">
-                <input
-                  type="text"
-                  value={equation}
-                  onChange={(e) => setEquation(e.target.value)}
-                  placeholder="Enter equation (e.g., sin(t))"
-                  aria-label="Waveform equation"
-                />
-                <button
-                  className="generate-btn"
-                  onClick={generateWaveform}
-                  disabled={loading}
-                  title="Generate waveform from equation"
-                >
-                  {loading ? 'Generating...' : 'Generate Waveform'}
-                </button>
-              </div>
-            </label>
-          </div>
-          
-          <div className="input-group image-input">
-            <label title="Import an image to create a wavetable from its brightness values">
-              Image Import:
-              <div 
-                className={`compact-drop-zone ${isProcessing ? 'loading' : ''}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                role="button"
-                tabIndex={0}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    fileInputRef.current?.click();
-                  }
-                }}
+        <div className="equation-input">
+          <label title="Enter a mathematical equation using 't' as the variable">
+            Equation:
+            <div className="equation-row">
+              <input
+                type="text"
+                value={equation}
+                onChange={(e) => setEquation(e.target.value)}
+                placeholder="e.g., sin(2 * pi * t)"
+              />
+              <button
+                className="generate-btn"
+                onClick={generateWaveform}
+                disabled={isProcessing}
               >
-                <div className="compact-drop-content">
-                  {isProcessing ? (
-                    <span>Processing image...</span>
-                  ) : (
-                    <>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M21 15V16.2C21 17.8802 21 18.7202 20.673 19.362C20.3854 19.9265 19.9265 20.3854 19.362 20.673C18.7202 21 17.8802 21 16.2 21H7.8C6.11984 21 5.27976 21 4.63803 20.673C4.07354 20.3854 3.6146 19.9265 3.32698 19.362C3 18.7202 3 17.8802 3 16.2V15M17 8L12 3M12 3L7 8M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                      <span>{selectedFileName || 'Click or drop image'}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  setSelectedFileName(file.name);
-                  handleImageUpload(file);
+                Generate
+              </button>
+            </div>
+          </label>
+        </div>
+        
+        <div className="image-input">
+          <label title="Import an image to create a wavetable from its brightness values">
+            Image Import:
+            <div 
+              className={`compact-drop-zone ${isProcessing ? 'loading' : ''} ${isDragging ? 'dragging' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  fileInputRef.current?.click();
                 }
               }}
-              style={{ display: 'none' }}
-            />
-          </div>
-        </div>
-
-        <div className="control-section">
-          <div className="control-buttons">
-            <div className="preset-buttons" role="group" aria-label="Basic waveform presets">
-              {[
-                { id: 'sine', label: 'Sine' },
-                { id: 'square', label: 'Square' },
-                { id: 'sawtooth', label: 'Sawtooth' },
-                { id: 'triangle', label: 'Triangle' }
-              ].map(preset => (
-                <button
-                  key={preset.id}
-                  className={`preset-btn ${activePreset === preset.id ? 'active' : ''}`}
-                  onClick={() => handleBasicWaveform(preset.id)}
-                  title={`Generate ${preset.label.toLowerCase()} waveform`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="view-controls">
-              <div className="view-toggle">
-                <button
-                  className={`toggle-button ${!is3D ? 'active' : ''}`}
-                  onClick={() => setIs3D(false)}
-                >
-                  2D View
-                </button>
-                <button
-                  className={`toggle-button ${is3D ? 'active' : ''}`}
-                  onClick={() => setIs3D(true)}
-                >
-                  3D View
-                </button>
-              </div>
-              
-              <div className="gain-control">
-                <div className="gain-divider"></div>
-                <label title="Adjust the amplitude of the waveform">
-                  Gain:
-                  <input
-                    type="range"
-                    min="0"
-                    max="2"
-                    step="0.01"
-                    value={gain}
-                    onChange={(e) => setGain(parseFloat(e.target.value))}
-                  />
-                  <span className="gain-value">{gain.toFixed(2)}</span>
-                </label>
-              </div>
-            </div>
-
-            <button
-              className="download-btn"
-              onClick={handleDownload}
-              disabled={!waveformData || isProcessing}
-              title="Download wavetable as WAV file"
             >
-              {isProcessing ? 'Processing...' : 'Download Wavetable'}
-            </button>
+              <div className="compact-drop-content">
+                {isProcessing ? (
+                  <span>Processing image...</span>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M21 15V16.2C21 17.8802 21 18.7202 20.673 19.362C20.3854 19.9265 19.9265 20.3854 19.362 20.673C18.7202 21 17.8802 21 16.2 21H7.8C6.11984 21 5.27976 21 4.63803 20.673C4.07354 20.3854 3.6146 19.9265 3.32698 19.362C3 18.7202 3 17.8802 3 16.2V15M17 8L12 3M12 3L7 8M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span>{selectedFileName || 'Click or drop image'}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setSelectedFileName(file.name);
+                handleImageUpload(file);
+              }
+            }}
+            style={{ display: 'none' }}
+          />
+        </div>
+      </div>
+
+      <div className="control-section">
+        <div className="control-buttons">
+          <div className="preset-buttons" role="group" aria-label="Basic waveform presets">
+            {[
+              { id: 'sine', label: 'Sine' },
+              { id: 'square', label: 'Square' },
+              { id: 'sawtooth', label: 'Sawtooth' },
+              { id: 'triangle', label: 'Triangle' }
+            ].map(preset => (
+              <button
+                key={preset.id}
+                className={`preset-btn ${activePreset === preset.id ? 'active' : ''}`}
+                onClick={() => handleBasicWaveform(preset.id)}
+                title={`Generate ${preset.label.toLowerCase()} waveform`}
+              >
+                {preset.label}
+              </button>
+            ))}
           </div>
 
-          {error && (
-            <div className="error-message" role="alert">
-              {error}
+          <div className="view-controls">
+            <div className="view-toggle">
+              <button
+                className={`toggle-button ${!is3D ? 'active' : ''}`}
+                onClick={() => setIs3D(false)}
+              >
+                2D View
+              </button>
+              <button
+                className={`toggle-button ${is3D ? 'active' : ''}`}
+                onClick={() => setIs3D(true)}
+              >
+                3D View
+              </button>
             </div>
-          )}
+            
+            <div className="gain-control">
+              <div className="gain-divider"></div>
+              <label title="Adjust the amplitude of the waveform">
+                Gain:
+                <input
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.01"
+                  value={gain}
+                  onChange={(e) => setGain(parseFloat(e.target.value))}
+                />
+                <span className="gain-value">{gain.toFixed(2)}</span>
+              </label>
+            </div>
+          </div>
+
+          <button
+            className="download-btn"
+            onClick={handleDownload}
+            disabled={!waveformData || isProcessing}
+            title="Download wavetable as WAV file"
+          >
+            {isProcessing ? 'Processing...' : 'Download Wavetable'}
+          </button>
         </div>
+
+        {error && (
+          <div className="error-message" role="alert">
+            {error}
+          </div>
+        )}
       </div>
 
       <div className="visualization-section">
