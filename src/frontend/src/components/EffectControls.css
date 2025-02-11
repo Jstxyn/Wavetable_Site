@@ -141,11 +141,16 @@ input:checked + .slider:before {
 
 /* Parameter Controls */
 .parameter-control {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
     background: #222;
     border-radius: 4px;
     border: 1px solid #333;
+    transition: background-color 0.2s ease;
+}
+
+.parameter-control:hover {
+    background: #2a2a2a;
 }
 
 .parameter-control:last-child {
@@ -153,60 +158,217 @@ input:checked + .slider:before {
 }
 
 .parameter-control label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    color: #fff;
-    font-size: 0.9rem;
+    display: block;
+    width: 100%;
 }
 
-.parameter-input {
+.param-input {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    position: relative;
 }
 
 .parameter-control input[type="range"] {
     flex: 1;
-    height: 4px;
+    height: 20px;
     -webkit-appearance: none;
-    background: #444;
-    border-radius: 2px;
+    background: transparent;
+    cursor: pointer;
+    padding: 8px 0;
+}
+
+.parameter-control input[type="range"]:focus {
     outline: none;
 }
 
+/* Track styling */
+.parameter-control input[type="range"]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    background: #444;
+    border-radius: 2px;
+    transition: background-color 0.2s ease;
+}
+
+.parameter-control input[type="range"]::-moz-range-track {
+    width: 100%;
+    height: 4px;
+    background: #444;
+    border-radius: 2px;
+    transition: background-color 0.2s ease;
+}
+
+/* Thumb styling */
 .parameter-control input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
     background: #ff4444;
     border-radius: 50%;
-    cursor: pointer;
+    margin-top: -6px;
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: all 0.2s ease;
-}
-
-.parameter-control input[type="range"]::-webkit-slider-thumb:hover {
-    transform: scale(1.1);
 }
 
 .parameter-control input[type="range"]::-moz-range-thumb {
     width: 16px;
     height: 16px;
+    background: #ff4444;
     border: none;
     border-radius: 50%;
-    background: #ff4444;
-    cursor: pointer;
+    margin-top: -6px;
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
 }
 
+/* Active state */
+.parameter-control input[type="range"]:active::-webkit-slider-thumb {
+    cursor: grabbing;
+    transform: scale(1.2);
+    background: #ff6666;
+}
+
+.parameter-control input[type="range"]:active::-moz-range-thumb {
+    cursor: grabbing;
+    transform: scale(1.2);
+    background: #ff6666;
+}
+
+/* Hover state */
+.parameter-control input[type="range"]:hover::-webkit-slider-runnable-track {
+    background: #555;
+}
+
+.parameter-control input[type="range"]:hover::-moz-range-track {
+    background: #555;
+}
+
+.parameter-control input[type="range"]:hover::-webkit-slider-thumb {
+    transform: scale(1.1);
+}
+
+.parameter-control input[type="range"]:hover::-moz-range-thumb {
+    transform: scale(1.1);
+}
+
+/* Value display */
 .param-value {
     min-width: 3.5em;
     text-align: right;
     font-family: monospace;
-    color: #ff4444;
     font-size: 0.9rem;
     padding: 0.25rem 0.5rem;
     background: rgba(255, 68, 68, 0.1);
     border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+/* Parameter description */
+.param-description {
+    color: #888;
+    font-size: 0.9rem;
+    margin-left: 0.5rem;
+    cursor: help;
+    transition: color 0.2s ease;
+}
+
+.param-description:hover {
+    color: #ff4444;
+}
+
+/* Disabled state */
+.parameter-control input[type="range"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.parameter-control input[type="range"]:disabled::-webkit-slider-thumb {
+    background: #666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.parameter-control input[type="range"]:disabled::-moz-range-thumb {
+    background: #666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.parameter-control.bypassed .param-value {
+    opacity: 0.5;
+}
+
+/* Processing State */
+.parameter-control.processing {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Bypass Toggle */
+.bypass-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    background: rgba(255, 68, 68, 0.1);
+    transition: all 0.2s ease;
+}
+
+.bypass-toggle:hover {
+    background: rgba(255, 68, 68, 0.2);
+}
+
+.bypass-toggle input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 40px;
+    height: 20px;
+    background: #444;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.bypass-toggle input[type="checkbox"]:checked {
+    background: #ff4444;
+}
+
+.bypass-toggle input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    background: white;
+    transition: transform 0.3s ease;
+}
+
+.bypass-toggle input[type="checkbox"]:checked::before {
+    transform: translateX(20px);
+}
+
+.bypass-toggle input[type="checkbox"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-label {
+    font-size: 0.9rem;
+    color: #888;
+    transition: color 0.2s ease;
+}
+
+.bypass-toggle input[type="checkbox"]:checked + .toggle-label {
+    color: #ff4444;
 }
 
 /* Processing State */
@@ -240,7 +402,7 @@ input:checked + .slider:before {
 }
 
 .parameter-control input[type="range"]:disabled::-webkit-slider-thumb,
-.parameter-control input[type="range"]:disabled::-moz-range-thumb {
+.parameter-control input[type="range"]::-moz-range-thumb {
     background: #666;
     cursor: not-allowed;
 }

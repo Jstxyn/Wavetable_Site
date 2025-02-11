@@ -1,20 +1,28 @@
 """
 File: chaos_fold.py
 Purpose: Implements an optimized Chaos Wavefolding effect using the Lorenz attractor
-Date: 2025-02-10
+Date: 2025-02-11
 """
 
 from . import WaveEffect
 import numpy as np
 from typing import Dict, Any, List
 from scipy.integrate import odeint
-import warnings
+import logging
+import threading
 
-# Suppress scipy integration warnings for performance
-warnings.filterwarnings('ignore', category=UserWarning, module='scipy.integrate._ivp.rk')
+logger = logging.getLogger(__name__)
+
+# Thread-local storage for caching
+_local = threading.local()
+
+def _get_cache():
+    if not hasattr(_local, 'cache'):
+        _local.cache = {}
+    return _local.cache
 
 def _lorenz_system(state, t, sigma, rho, beta):
-    """Compute the Lorenz system derivatives with vectorized operations."""
+    """Compute the Lorenz system derivatives."""
     x, y, z = state
     dx = sigma * (y - x)
     dy = x * (rho - z) - y
@@ -23,8 +31,7 @@ def _lorenz_system(state, t, sigma, rho, beta):
 
 class ChaosFoldEffect(WaveEffect):
     def __init__(self):
-        self._name = "chaos_fold"
-        self._cache = {}
+        self._name = "chaosFold"  # Must match the key in effect_processors
         
     @property
     def name(self) -> str:
@@ -36,8 +43,8 @@ class ChaosFoldEffect(WaveEffect):
             "beta": {
                 "type": "float",
                 "min": 0.0,
-                "max": 2.0,
-                "default": 0.5,
+                "max": 1.0,
+                "default": 0.48,
                 "description": "Controls folding strength"
             },
             "timeStep": {
@@ -91,12 +98,6 @@ class ChaosFoldEffect(WaveEffect):
             }
         }
     
-    def _get_cache_key(self, waveform: np.ndarray, params: Dict[str, float]) -> str:
-        """Generate a cache key from waveform and parameters."""
-        param_str = ':'.join(f"{k}={v}" for k, v in sorted(params.items()))
-        waveform_hash = hash(waveform.tobytes())
-        return f"{waveform_hash}:{param_str}"
-    
     def _validate_params(self, params: Dict[str, Any]) -> Dict[str, float]:
         """Validate and convert parameters to float."""
         if params is None:
@@ -106,124 +107,140 @@ class ChaosFoldEffect(WaveEffect):
         param_specs = self.parameters
         
         for name, spec in param_specs.items():
-            value = params.get(name, spec['default'])
             try:
-                value = float(value)
-            except (TypeError, ValueError):
-                value = float(spec['default'])
-            value = max(spec['min'], min(spec['max'], value))
-            valid_params[name] = value
-            
+                value = float(params.get(name, spec['default']))
+                value = max(spec['min'], min(spec['max'], value))
+                valid_params[name] = value
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Invalid parameter {name}: {e}, using default")
+                valid_params[name] = float(spec['default'])
+                
         return valid_params
 
-    def _apply_fold_symmetry(self, waveform: np.ndarray, symmetry: float) -> np.ndarray:
-        """Apply fold symmetry with vectorized operations."""
-        pos_fold = np.maximum(0, waveform)
-        neg_fold = np.minimum(0, waveform)
-        return pos_fold * symmetry + neg_fold * (2 - symmetry)
-
-    def _apply_complexity(self, waveform: np.ndarray, complexity: float) -> np.ndarray:
-        """Add harmonic complexity with vectorized operations."""
-        harmonics = np.sin(waveform * np.pi * 2) * complexity
-        return waveform + harmonics * (1 - np.abs(waveform))
+    def _get_cache_key(self, waveform: np.ndarray, params: Dict[str, float]) -> str:
+        """Generate a cache key from waveform and parameters."""
+        param_str = ':'.join(f"{k}={v:.6f}" for k, v in sorted(params.items()))
+        waveform_hash = hash(waveform.tobytes())
+        return f"{waveform_hash}:{param_str}"
 
     def process(self, waveform: np.ndarray, params: Dict[str, Any] = None) -> np.ndarray:
+        """
+        Apply chaos-based wavefolding to the input waveform.
+        
+        Args:
+            waveform (np.ndarray): Input waveform array
+            params (dict): Effect parameters
+        
+        Returns:
+            np.ndarray: Processed waveform array
+        """
         try:
+            # Input validation
+            if waveform is None or len(waveform) == 0:
+                logger.error("Empty waveform received")
+                return np.array([], dtype=np.float32)
+
             # Validate parameters
             params = self._validate_params(params)
             
             # Check cache
             cache_key = self._get_cache_key(waveform, params)
-            if cache_key in self._cache:
-                return self._cache[cache_key]
-            
-            # Get parameters
-            beta = params['beta']
-            dt = params['timeStep']
-            mix = params['mix']
-            sigma = params['sigma']
-            rho = params['rho']
-            fold_symmetry = params['foldSymmetry']
-            complexity = params['complexity']
-            lfo_amount = params['lfoAmount']
-            
-            # Ensure waveform is numpy array
-            waveform = np.asarray(waveform)
-            if len(waveform) == 0:
-                return np.array([])
+            cache = _get_cache()
+            if cache_key in cache:
+                return cache[cache_key].copy()
+
+            # Convert to float32 for processing
+            waveform = np.asarray(waveform, dtype=np.float32)
             
             # Normalize input to prevent instability
-            waveform_max = np.max(np.abs(waveform))
-            if waveform_max == 0:
-                return waveform
+            max_abs = np.max(np.abs(waveform))
+            if max_abs < 1e-6:
+                return np.zeros_like(waveform, dtype=np.float32)
                 
-            waveform_norm = waveform / waveform_max
+            waveform_norm = waveform / max_abs
+
+            # Initialize Lorenz system with stable initial conditions
+            x = np.zeros_like(waveform_norm)
+            y = np.zeros_like(waveform_norm)
+            z = np.zeros_like(waveform_norm)
             
-            # Use multiple samples for initial conditions
-            window_size = min(10, len(waveform))
-            initial_x = np.mean(waveform_norm[:window_size])
-            initial_y = np.std(waveform_norm[:window_size])
-            initial_z = 0.0
+            x[0] = waveform_norm[0]
+            y[0] = 0.0
+            z[0] = 20.0  # Initial z offset
             
-            # Create time points with adaptive resolution
-            oversample = 1 + int(complexity * 3)  # Higher oversampling for more complex waveforms
-            num_points = len(waveform) * oversample
-            t = np.linspace(0, len(waveform) * dt, num_points)
+            # Generate Lorenz attractor trajectory
+            for i in range(1, len(waveform)):
+                dx = params['sigma'] * (y[i-1] - x[i-1])
+                dy = x[i-1] * (params['rho'] - z[i-1]) - y[i-1]
+                dz = x[i-1] * y[i-1] - params['beta'] * z[i-1]
+                
+                x[i] = x[i-1] + dx * params['timeStep']
+                y[i] = y[i-1] + dy * params['timeStep']
+                z[i] = z[i-1] + dz * params['timeStep']
             
-            # Solve the Lorenz system with optimized integration
-            solution = odeint(
-                _lorenz_system,
-                [initial_x, initial_y, initial_z],
-                t,
-                args=(sigma, rho, beta),
-                rtol=1e-6,
-                atol=1e-6,
-                mxstep=1000
-            )
+            # Normalize trajectories
+            x = x / np.max(np.abs(x)) if np.max(np.abs(x)) > 0 else x
+            y = y / np.max(np.abs(y)) if np.max(np.abs(y)) > 0 else y
+            z = z / np.max(np.abs(z)) if np.max(np.abs(z)) > 0 else z
             
-            # Extract x component and resample to original length
-            indices = np.linspace(0, len(solution) - 1, len(waveform)).astype(int)
-            folded = solution[indices, 0]
+            # Apply folding and modulation
+            folded = np.zeros_like(waveform_norm)
+            threshold = 1.0 + params['complexity'] * 2.0
             
-            # Center and normalize the folded signal
-            folded = folded - np.mean(folded)
-            folded_max = np.max(np.abs(folded))
-            if folded_max > 0:
-                folded = folded / folded_max
+            for i in range(len(waveform)):
+                # Combine input with Lorenz trajectory
+                value = waveform_norm[i] + (x[i] * 0.3 + y[i] * 0.3 + z[i] * 0.4) * params['complexity']
+                
+                # Apply folding
+                while np.abs(value) > threshold:
+                    if value > threshold:
+                        value = 2 * threshold - value
+                    elif value < -threshold:
+                        value = -2 * threshold - value
+                
+                # Apply fold symmetry
+                if params['foldSymmetry'] != 0.5:
+                    if value > 0:
+                        value *= (1.0 + (params['foldSymmetry'] - 0.5))
+                    else:
+                        value *= (1.0 + (0.5 - params['foldSymmetry']))
+                
+                # Apply LFO modulation
+                if params['lfoAmount'] > 0:
+                    phase = 2 * np.pi * i / len(waveform)
+                    lfo = np.sin(phase) * params['lfoAmount']
+                    value *= (1.0 + lfo)
+                
+                folded[i] = value
             
-            # Apply fold symmetry
-            folded = self._apply_fold_symmetry(folded, fold_symmetry)
+            # Normalize folded output
+            folded = folded / np.max(np.abs(folded)) if np.max(np.abs(folded)) > 0 else folded
             
-            # Add harmonic complexity
-            folded = self._apply_complexity(folded, complexity)
-            
-            # Apply LFO modulation
-            if lfo_amount > 0:
-                lfo = np.sin(np.linspace(0, 2 * np.pi, len(waveform)))
-                folded = folded * (1 + lfo * lfo_amount * 0.5)
-            
-            # Soft clipping for better dynamics
-            folded = np.tanh(folded * (1 + complexity))
-            
-            # Mix with original signal
-            result = (1 - mix) * waveform_norm + mix * folded
+            # Mix dry and wet signals
+            result = (1 - params['mix']) * waveform_norm + params['mix'] * folded
             
             # Restore original amplitude
-            result = result * waveform_max
+            result = result * max_abs
             
-            # Cache the result
-            self._cache[cache_key] = result
+            # Final validation
+            if np.any(np.isnan(result)) or np.any(np.isinf(result)):
+                logger.error("Invalid values in output, returning input")
+                return waveform
+            
+            # Cache result
+            result = result.astype(np.float32)
+            cache[cache_key] = result.copy()
             
             # Limit cache size
-            if len(self._cache) > 1000:
-                self._cache.pop(next(iter(self._cache)))
+            if len(cache) > 1000:
+                cache.pop(next(iter(cache)))
             
             return result
             
         except Exception as e:
-            print(f"Error in chaos_fold: {str(e)}")
+            logger.error(f"Error in chaos_fold processing: {str(e)}")
             return waveform
-        
+
     def process_frames(self, frames: List[np.ndarray], params: Dict[str, Any] = None) -> List[np.ndarray]:
         """Process multiple frames with the same parameters."""
         return [self.process(frame, params) for frame in frames]

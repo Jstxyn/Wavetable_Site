@@ -231,19 +231,33 @@ export class EffectManager {
      * @param effectId - ID of the effect to toggle
      */
     toggleBypass(effectId: string): void {
-        if (this.bypassedEffects.has(effectId)) {
-            this.bypassedEffects.delete(effectId);
-        } else {
+        const effect = this.effects.find(e => e.id === effectId);
+        if (!effect) return;
+
+        const newBypassState = !this.isEffectBypassed(effectId);
+        
+        // Update bypass state atomically
+        if (newBypassState) {
             this.bypassedEffects.add(effectId);
+        } else {
+            this.bypassedEffects.delete(effectId);
         }
 
-        // Update the effect's bypassed state
-        const effect = this.effects.find(e => e.id === effectId);
-        if (effect) {
-            effect.bypassed = this.bypassedEffects.has(effectId);
-            // Notify listeners of bypass change
-            this.onParametersChanged(effectId);
-        }
+        // Clear cache when bypass state changes
+        this.clearComputeCache(effectId);
+
+        // Dispatch bypass state change event
+        const event = new CustomEvent('effect-bypass-changed', {
+            detail: { 
+                effectId,
+                bypassed: newBypassState,
+                effect: {
+                    ...effect,
+                    bypassed: newBypassState
+                }
+            }
+        });
+        window.dispatchEvent(event);
     }
 
     /**
@@ -279,17 +293,37 @@ export class EffectManager {
      * @returns Promise resolving to the processed waveform data
      */
     async applyEffects(waveformData: number[]): Promise<number[]> {
+        if (!Array.isArray(waveformData) || waveformData.length === 0) {
+            throw new Error('Invalid waveform data');
+        }
+
         let processedData = [...waveformData];
         
         // Process each non-bypassed effect in sequence
         for (const effect of this.effects) {
             if (!this.isEffectBypassed(effect.id)) {
-                const parameters = effect.parameters.reduce((acc, param) => {
-                    acc[param.id] = param.value;
-                    return acc;
-                }, {} as Record<string, number>);
-
                 try {
+                    const parameters = effect.parameters.reduce((acc, param) => {
+                        acc[param.id] = param.value;
+                        return acc;
+                    }, {} as Record<string, number>);
+
+                    // Check cache first
+                    const cacheKey = this.getCacheKey(effect.id, parameters);
+                    const cached = this.computeCache.get(cacheKey);
+                    
+                    if (cached && 
+                        cached.params && 
+                        JSON.stringify(cached.params) === JSON.stringify(parameters) &&
+                        cached.result.length === processedData.length) {
+                        processedData = [...cached.result];
+                        continue;
+                    }
+
+                    // Create AbortController for timeout
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 5000);
+
                     const response = await fetch(`${API_BASE}/api/effects/apply`, {
                         method: 'POST',
                         headers: {
@@ -300,31 +334,66 @@ export class EffectManager {
                             waveform: processedData,
                             parameters
                         }),
+                        signal: controller.signal
                     });
 
+                    clearTimeout(timeout);
+
                     if (!response.ok) {
-                        throw new Error(`Failed to apply effect ${effect.name}`);
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to apply effect');
                     }
 
-                    const result: EffectResponse = await response.json();
+                    const result = await response.json();
+                    
                     if (result.error) {
                         throw new Error(result.error);
                     }
-                    processedData = result.waveform;
+
+                    if (!Array.isArray(result.waveform)) {
+                        throw new Error('Invalid waveform data received');
+                    }
 
                     // Cache the result
-                    this.computeCache.set(this.getCacheKey(effect.id, parameters), {
-                        params: parameters,
+                    this.computeCache.set(cacheKey, {
+                        params: { ...parameters },
                         result: [...result.waveform]
                     });
+
+                    // Update processed data
+                    processedData = result.waveform;
+
+                    // Notify listeners of successful processing
+                    const event = new CustomEvent('effect-processing-complete', {
+                        detail: { 
+                            effectId: effect.id,
+                            success: true,
+                            waveform: processedData
+                        }
+                    });
+                    window.dispatchEvent(event);
+
                 } catch (error) {
-                    console.error(`Error applying effect ${effect.name}:`, error);
-                    // Don't throw, just continue with unprocessed data
-                    continue;
+                    console.error(`Error applying ${effect.id}:`, error);
+                    
+                    // Notify listeners of processing error
+                    const event = new CustomEvent('effect-processing-error', {
+                        detail: { 
+                            effectId: effect.id,
+                            error: error instanceof Error ? error.message : 'Unknown error'
+                        }
+                    });
+                    window.dispatchEvent(event);
+                    
+                    // Clear cache on error
+                    this.clearComputeCache(effect.id);
+                    
+                    // Re-throw error for proper error handling
+                    throw error;
                 }
             }
         }
-
+        
         return processedData;
     }
 }
