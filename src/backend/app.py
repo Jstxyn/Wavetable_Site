@@ -1,26 +1,36 @@
+"""
+File: app.py
+Purpose: Main Flask application entry point
+Date: 2025-02-10
+"""
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+import logging
+import os
 import numpy as np
 from scipy import signal
-import logging
 import io
 import struct
-from flask import send_file
-import traceback
 from functools import wraps
 import base64
 from scipy import ndimage
 import cv2
 from effects.registry import registry
+from api.effects import effects_bp
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
 
+# Initialize Flask app
 app = Flask(__name__)
+CORS(app)
+
+# Register blueprints
+app.register_blueprint(effects_bp)
 
 # Configure CORS
 CORS(app, resources={
@@ -651,4 +661,5 @@ def image_to_wavetable():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8081, host='0.0.0.0')
+    port = int(os.environ.get('PORT', 8081))
+    app.run(host='0.0.0.0', port=port, debug=True)

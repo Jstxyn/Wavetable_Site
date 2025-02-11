@@ -208,26 +208,33 @@ const WavetableEditor: React.FC = () => {
     ctx.stroke();
   }, []);
 
-  const handleEffectChange = async (effectName: string, parameters: Record<string, any>) => {
+  const handleEffectChange = async () => {
     if (!waveformData) return;
 
     try {
       setIsEffectProcessing(true);
-      const result = await effectManager.applyEffect(
-        effectName,
-        waveformData.waveform,
-        parameters,
-        waveformData.frames
-      );
+      const processedData = await effectManager.applyEffects(waveformData.waveform);
+
+      // Create frames array from processed data
+      const newFrames = Array(32).fill(null).map((_, i) => {
+        // Create variations of the waveform for each frame
+        const frameOffset = (i / 32) * Math.PI;
+        return processedData.map((sample, j) => {
+          const phase = (j / processedData.length) * 2 * Math.PI;
+          return sample * Math.cos(phase + frameOffset);
+        });
+      });
 
       setWaveformData(prev => ({
         ...prev!,
-        waveform: result.waveform,
-        frames: result.frames
+        waveform: processedData,
+        frames: newFrames
       }));
 
+      setFrames(newFrames); // Update frames state for 3D view
+
       if (canvasRef.current) {
-        const scaledWaveform = result.waveform.map(v => v * gain);
+        const scaledWaveform = processedData.map(v => v * gain);
         drawWaveform(canvasRef.current, scaledWaveform);
       }
     } catch (error) {

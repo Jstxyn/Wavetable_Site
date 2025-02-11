@@ -1,0 +1,63 @@
+# Coding Editor Rules for Writing Clean, Well-Commented, and Reliable Code
+
+## 1. Code Structure and Formatting
+1. **Follow a consistent style guide** (e.g., PEP 8 for Python, ESLint for JavaScript):
+   - Use 4 spaces for indentation.
+   - Limit line length to 80–100 characters.
+   - Include a newline at the end of each file.
+
+2. **Organize your code logically:**
+   - **Top-down structure:** Place high-level functions and variables at the top, detailed implementations below.
+   - Separate different sections (e.g., imports, constants, classes, functions, main logic) with blank lines and headers.
+
+3. **Use descriptive names** for variables, functions, classes, and constants:
+   - Variable names should describe their purpose (e.g., `userInput` instead of `inp`).
+   - Use CamelCase for classes, snake_case for functions and variables, and UPPERCASE for constants.
+
+4. **Minimize code duplication:**
+   - Create reusable functions or modules for repeated logic.
+   - Use inheritance, composition, or utility functions as needed.
+
+---
+
+## 2. Write Well-Commented Code
+1. **Comment purposefully:**
+   - Begin every file with a brief **file header**:
+     ```python
+     # File: waveform_editor.py
+     # Purpose: Implements a UI for waveform generation and editing with effects.
+     # Author: [Your Name]
+     # Date: [Date]
+     ```
+   - Document every function, class, and module with a **docstring**:
+     ```python
+     def calculate_waveform(data):
+         """
+         Calculates the waveform based on the given data.
+
+         Args:
+             data (list): A list of numerical values representing the input data.
+
+         Returns:
+             list: Processed waveform data.
+         """
+         # Function logic goes here...
+     ```
+
+2. **Inline comments**:
+   - Add comments for complex or non-obvious logic:
+     ```python
+     # Normalize the input data between 0 and 1
+     normalized_data = [x / max(data) for x in data]
+     ```
+
+3. **Avoid redundant comments:**
+   - Don’t state the obvious:
+     ```python
+     x = 10  # Set x to 10  # <-- Avoid this
+     ```
+
+4. Use **TODO** and **FIXME** comments for incomplete or buggy code:
+   ```python
+   # TODO: Add validation for edge cases
+   # FIXME: Resolve bug with slider responsiveness

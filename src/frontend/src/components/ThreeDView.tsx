@@ -1,3 +1,9 @@
+/**
+ * File: ThreeDView.tsx
+ * Purpose: Renders a 3D visualization of a wavetable using Three.js
+ * Date: 2025-02-10
+ */
+
 import React, { useRef, useMemo } from 'react';
 import { extend, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
@@ -54,14 +60,28 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
     const samplesPerFrame = frames[0].length;
     const lines: THREE.Vector3[][] = [];
 
-    // Sample every tenth frame for significantly reduced density
-    for (let i = 0; i < frameCount; i += 10) {
+    // Sample frames adaptively based on frame count
+    const frameStep = Math.max(1, Math.floor(frameCount / 32));
+    const sampleStep = Math.max(1, Math.floor(samplesPerFrame / 64));
+
+    for (let i = 0; i < frameCount; i += frameStep) {
       const framePoints: THREE.Vector3[] = [];
-      // Sample every tenth point within each frame
-      for (let j = 0; j < samplesPerFrame; j += 10) {
+      for (let j = 0; j < samplesPerFrame; j += sampleStep) {
         framePoints.push(points[i * samplesPerFrame + j]);
       }
       lines.push(framePoints);
+
+      // Add cross-frame connections every N frames
+      if (i > 0 && i < frameCount - frameStep) {
+        const crossPoints: THREE.Vector3[] = [];
+        for (let j = 0; j < samplesPerFrame; j += sampleStep * 4) {
+          crossPoints.push(
+            points[i * samplesPerFrame + j],
+            points[(i + frameStep) * samplesPerFrame + j]
+          );
+        }
+        lines.push(crossPoints);
+      }
     }
 
     return lines;
@@ -73,12 +93,15 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
       uniforms: {
         color: { value: new THREE.Color("#ff4444") },
         glowColor: { value: new THREE.Color("#ff8888") },
-        glowIntensity: { value: 2.2 } // Increased glow intensity for better visibility with fewer lines
+        glowIntensity: { value: 1.8 }
       },
       vertexShader: `
         varying vec3 vPosition;
+        varying vec3 vNormal;
+        
         void main() {
           vPosition = position;
+          vNormal = normalize(normalMatrix * normal);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -87,17 +110,25 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
         uniform vec3 glowColor;
         uniform float glowIntensity;
         varying vec3 vPosition;
+        varying vec3 vNormal;
         
         void main() {
           float glow = length(vPosition) * glowIntensity;
           vec3 finalColor = mix(color, glowColor, glow);
+          
+          // Add edge highlighting
+          float edgeFactor = 1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0)));
+          finalColor = mix(finalColor, glowColor, edgeFactor * 0.5);
+          
           gl_FragColor = vec4(finalColor, 1.0);
         }
       `,
       transparent: true,
+      side: THREE.DoubleSide,
     });
   }, []);
 
+  // Smooth camera controls
   useFrame(() => {
     if (controlsRef.current) {
       controlsRef.current.update();
@@ -106,26 +137,33 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ frames, gain }) => {
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 2, 4]} />
+      <PerspectiveCamera makeDefault position={[2, 2, 2]} />
       <OrbitControls 
         ref={controlsRef} 
         enableDamping 
-        dampingFactor={0.1} 
+        dampingFactor={0.05}
+        rotateSpeed={0.5}
+        zoomSpeed={0.7}
+        minDistance={1}
+        maxDistance={10}
       />
       
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1} />
+      <pointLight position={[-10, -10, -10]} intensity={0.5} />
       
-      {lineGeometry && lineGeometry.map((line, index) => (
-        <Line
-          key={index}
-          points={line}
-          color="#ff4444"
-          lineWidth={5}  // Increased line width to make fewer lines more visible
-          dashed={false}
-          material={glowMaterial}
-        />
-      ))}
+      <group rotation={[0, Math.PI / 4, 0]}>
+        {lineGeometry && lineGeometry.map((line, index) => (
+          <Line
+            key={index}
+            points={line}
+            color="#ff4444"
+            lineWidth={3}
+            dashed={false}
+            material={glowMaterial}
+          />
+        ))}
+      </group>
     </>
   );
 };
