@@ -219,8 +219,7 @@
 
 .visualization {
   width: 100%;
-  height: 300px;
-  position: relative;
+  margin: 1rem 0;
 }
 
 .two-d-view {
@@ -231,10 +230,11 @@
 
 .three-d-view {
   width: 100%;
-  height: 100%;
-  min-height: 400px;
-  position: relative;
+  height: 400px;
   background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .three-d-view canvas {
@@ -246,24 +246,36 @@
 .parameters-section {
   padding: 1.5rem;
   border-top: 1px solid var(--border);
+  margin-top: 1rem;
 }
 
 .gain-control {
-  margin-bottom: 1.5rem;
+  position: relative;
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+}
+
+.gain-divider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #444;
 }
 
 .gain-control label {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  color: var(--text);
+  gap: 0.5rem;
+  color: #fff;
 }
 
 .gain-control input[type="range"] {
   flex: 1;
-  -webkit-appearance: none;
   height: 4px;
-  background: #2a2a2a;
+  -webkit-appearance: none;
+  background: #444;
   border-radius: 2px;
   outline: none;
 }
@@ -275,77 +287,57 @@
   background: #ff4444;
   border-radius: 50%;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
 }
 
-.gain-control input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: #ff4444;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background 0.2s;
+.gain-control input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
 }
 
-.gain-control input[type="range"]:hover::-webkit-slider-thumb {
-  background: #ff6666;
-}
-
-.gain-control input[type="range"]:hover::-moz-range-thumb {
-  background: #ff6666;
-}
-
-.gain-control span {
-  min-width: 40px;
+.gain-value {
+  min-width: 3em;
   text-align: right;
   font-family: monospace;
-  color: #ff4444;
 }
 
-.compact-drop-zone {
+.waveform-canvas {
   width: 100%;
-  height: 100px;
-  border: 2px dashed #444;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  height: 200px;
   background: #1a1a1a;
-  position: relative;
-  overflow: hidden;
+  border: 1px solid #444;
+  border-radius: 4px;
 }
 
-.compact-drop-zone:hover {
-  border-color: #666;
-  background: #222;
-}
-
-.compact-drop-zone.dragging {
-  border-color: #ff4444;
-  background: rgba(255, 68, 68, 0.1);
-}
-
-.compact-drop-zone.loading {
-  pointer-events: none;
-  opacity: 0.8;
-}
-
-.compact-drop-content {
+.view-controls {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.view-toggle {
+  display: flex;
   gap: 0.5rem;
+}
+
+.toggle-button {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
   color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.compact-drop-content svg {
-  opacity: 0.7;
+.toggle-button:hover {
+  background: #333;
 }
 
-.compact-drop-content span {
-  font-size: 0.9rem;
+.toggle-button.active {
+  background: #ff4444;
+  border-color: #ff4444;
 }
 
 .basic-waveforms {

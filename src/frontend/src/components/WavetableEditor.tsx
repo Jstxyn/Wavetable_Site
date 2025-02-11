@@ -146,7 +146,8 @@ const WavetableEditor: React.FC = () => {
       setFrames(data.frames);
 
       if (canvasRef.current) {
-        drawWaveform(canvasRef.current, data.waveform);
+        const scaledWaveform = data.waveform.map(v => v * gain);
+        drawWaveform(canvasRef.current, scaledWaveform);
       }
     } catch (err) {
       console.error('Error generating waveform:', err);
@@ -165,7 +166,8 @@ const WavetableEditor: React.FC = () => {
       setFrames(data.frames);
 
       if (canvasRef.current) {
-        drawWaveform(canvasRef.current, data.waveform);
+        const scaledWaveform = data.waveform.map(v => v * gain);
+        drawWaveform(canvasRef.current, scaledWaveform);
       }
     } catch (err) {
       console.error('Error generating waveform:', err);
@@ -180,7 +182,7 @@ const WavetableEditor: React.FC = () => {
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Set up drawing style with thinner line
+    // Set up drawing style
     ctx.strokeStyle = '#ff4444';
     ctx.lineWidth = 1;
 
@@ -188,14 +190,13 @@ const WavetableEditor: React.FC = () => {
     ctx.beginPath();
     const stepX = canvas.width / waveform.length;
     const centerY = canvas.height / 2;
-    // Use 80% of half height for better visibility and to prevent crossing
-    const scaleY = (canvas.height / 2) * 0.8;
+    const scaleY = (canvas.height / 2) * 0.8; // Use 80% of half height
 
     waveform.forEach((value, index) => {
       const x = index * stepX;
-      // Ensure value is bounded between -1 and 1 before scaling
-      const boundedValue = Math.max(-1, Math.min(1, value));
+      const boundedValue = boundValue(value);
       const y = centerY + boundedValue * scaleY;
+      
       if (index === 0) {
         ctx.moveTo(x, y);
       } else {
@@ -225,7 +226,8 @@ const WavetableEditor: React.FC = () => {
       }));
 
       if (canvasRef.current) {
-        drawWaveform(canvasRef.current, result.waveform);
+        const scaledWaveform = result.waveform.map(v => v * gain);
+        drawWaveform(canvasRef.current, scaledWaveform);
       }
     } catch (error) {
       console.error('Failed to apply effect:', error);
@@ -338,7 +340,8 @@ const WavetableEditor: React.FC = () => {
       setFrames(data.frames);
 
       if (canvasRef.current) {
-        drawWaveform(canvasRef.current, data.waveform);
+        const scaledWaveform = data.waveform.map(v => v * gain);
+        drawWaveform(canvasRef.current, scaledWaveform);
       }
       
       // Store original waveform for effects
@@ -356,6 +359,14 @@ const WavetableEditor: React.FC = () => {
       setIsProcessing(false);
     }
   };
+
+  // Redraw waveform when toggling views or when gain changes
+  useEffect(() => {
+    if (!is3D && canvasRef.current && waveformData) {
+      const scaledWaveform = waveformData.waveform.map(v => v * gain);
+      drawWaveform(canvasRef.current, scaledWaveform);
+    }
+  }, [is3D, gain, waveformData]);
 
   // Generate initial waveform on mount
   useEffect(() => {
@@ -463,21 +474,37 @@ const WavetableEditor: React.FC = () => {
               ))}
             </div>
 
-            <div className="view-buttons" role="group" aria-label="View mode">
-              <button
-                className={`view-btn ${!is3D ? 'active' : ''}`}
-                onClick={() => setIs3D(false)}
-                title="Show 2D waveform view"
-              >
-                2D View
-              </button>
-              <button
-                className={`view-btn ${is3D ? 'active' : ''}`}
-                onClick={() => setIs3D(true)}
-                title="Show 3D wavetable view"
-              >
-                3D View
-              </button>
+            <div className="view-controls">
+              <div className="view-toggle">
+                <button
+                  className={`toggle-button ${!is3D ? 'active' : ''}`}
+                  onClick={() => setIs3D(false)}
+                >
+                  2D View
+                </button>
+                <button
+                  className={`toggle-button ${is3D ? 'active' : ''}`}
+                  onClick={() => setIs3D(true)}
+                >
+                  3D View
+                </button>
+              </div>
+              
+              <div className="gain-control">
+                <div className="gain-divider"></div>
+                <label title="Adjust the amplitude of the waveform">
+                  Gain:
+                  <input
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.01"
+                    value={gain}
+                    onChange={(e) => setGain(parseFloat(e.target.value))}
+                  />
+                  <span className="gain-value">{gain.toFixed(2)}</span>
+                </label>
+              </div>
             </div>
 
             <button
@@ -502,42 +529,22 @@ const WavetableEditor: React.FC = () => {
         <div className="visualization">
           {is3D ? (
             <div className="three-d-view">
-              <Canvas
-                camera={{ position: [0, 2, 4], fov: 75 }}
-                style={{ background: '#1a1a1a' }}
-              >
-                <ThreeDView 
-                  frames={waveformData?.frames || []} 
-                  gain={gain} 
-                />
+              <Canvas>
+                <ThreeDView frames={frames} gain={gain} />
+                <OrbitControls enablePan={true} enableZoom={true} />
               </Canvas>
             </div>
           ) : (
             <canvas
               ref={canvasRef}
+              className="waveform-canvas"
               width={800}
-              height={300}
-              className="two-d-view"
+              height={200}
             />
           )}
         </div>
 
         <div className="parameters-section">
-          <div className="gain-control">
-            <label title="Adjust the amplitude of the waveform">
-              Gain:
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                value={gain}
-                onChange={(e) => setGain(parseFloat(e.target.value))}
-              />
-              <span>{gain.toFixed(1)}</span>
-            </label>
-          </div>
-
           <EffectControls
             effectManager={effectManager}
             onEffectChange={handleEffectChange}
