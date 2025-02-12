@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { EffectManager } from '../effects/EffectManager';
 import { EffectControls } from './EffectControls';
 import ThreeDView from './ThreeDView';
+import { API_BASE } from '../config';
+import { VISUAL_SCALE, WAVEFORM_COLOR, DEFAULT_FRAME_COUNT } from '../constants/waveform';
 import './WavetableEditor.css';
 
 // Utility function to bound values between -1 and 1
@@ -39,10 +41,10 @@ const WaveformMesh: React.FC<WaveformMeshProps> = ({ frames, gain = 1.0 }) => {
     
     const vertices: number[] = [];
     const colors: number[] = [];
-    const color = new THREE.Color('#ff4d4d');
+    const color = new THREE.Color(WAVEFORM_COLOR);
     
     // Visual scale factor (38% of original)
-    const visualScale = 0.38;
+    const visualScale = VISUAL_SCALE;
     
     // Create line segments for each frame
     for (let i = 0; i < numFrames; i++) {
@@ -110,8 +112,6 @@ const WavetableEditor: React.FC = () => {
     }
   }, [waveformData, equation]);
 
-  const API_BASE = 'http://localhost:8081';
-
   const fetchWithCredentials = async (url: string, options: RequestInit = {}) => {
     const defaultOptions: RequestInit = {
       credentials: 'include',
@@ -178,34 +178,43 @@ const WavetableEditor: React.FC = () => {
 
   const drawWaveform = useCallback((canvas: HTMLCanvasElement, waveform: number[]) => {
     const ctx = canvas.getContext('2d');
-    if (!ctx || !waveform.length) return;
+    if (!ctx || !waveform.length) {
+      console.warn('Failed to get 2D context or waveform is empty');
+      return;
+    }
 
-    // Clear the canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+      // Clear the canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Set up drawing style
-    ctx.strokeStyle = '#ff4444';
-    ctx.lineWidth = 1;
+      // Set up drawing style
+      ctx.strokeStyle = WAVEFORM_COLOR;
+      ctx.lineWidth = 1;
 
-    // Draw the waveform
-    ctx.beginPath();
-    const stepX = canvas.width / waveform.length;
-    const centerY = canvas.height / 2;
-    const scaleY = (canvas.height / 2) * 0.8; // Use 80% of half height
-
-    waveform.forEach((value, index) => {
-      const x = index * stepX;
-      const boundedValue = boundValue(value);
-      const y = centerY + boundedValue * scaleY;
+      // Draw the waveform
+      ctx.beginPath();
+      const stepX = canvas.width / waveform.length;
+      const centerY = canvas.height / 2;
       
-      if (index === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
+      // Use the same visual scale as 3D view
+      const scaleY = centerY * VISUAL_SCALE;
 
-    ctx.stroke();
+      waveform.forEach((value, index) => {
+        const x = index * stepX;
+        const boundedValue = boundValue(value);
+        const y = centerY + boundedValue * scaleY;
+        
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+
+      ctx.stroke();
+    } catch (error) {
+      console.error('Error drawing waveform:', error);
+    }
   }, []);
 
   const handleEffectChange = async () => {
@@ -216,12 +225,12 @@ const WavetableEditor: React.FC = () => {
       const processedData = await effectManager.applyEffects(waveformData.waveform);
 
       // Create frames array from processed data
-      const newFrames = Array(32).fill(null).map((_, i) => {
+      const newFrames = Array(DEFAULT_FRAME_COUNT).fill(null).map((_, i) => {
         // Create variations of the waveform for each frame
-        const frameOffset = (i / 32) * Math.PI;
+        const frameOffset = (i / DEFAULT_FRAME_COUNT) * Math.PI;
         return processedData.map((sample, j) => {
           const phase = (j / processedData.length) * 2 * Math.PI;
-          return sample * Math.cos(phase + frameOffset);
+          return boundValue(sample * Math.cos(phase + frameOffset));
         });
       });
 
@@ -231,10 +240,10 @@ const WavetableEditor: React.FC = () => {
         frames: newFrames
       }));
 
-      setFrames(newFrames); // Update frames state for 3D view
+      setFrames(newFrames);
 
       if (canvasRef.current) {
-        const scaledWaveform = processedData.map(v => v * gain);
+        const scaledWaveform = processedData.map(v => boundValue(v * gain));
         drawWaveform(canvasRef.current, scaledWaveform);
       }
     } catch (error) {
@@ -523,9 +532,19 @@ const WavetableEditor: React.FC = () => {
         <div className="visualization">
           {is3D ? (
             <div className="three-d-view">
-              <Canvas>
+              <Canvas
+                camera={{ position: [2, 2, 2], fov: 75 }}
+                style={{ width: '100%', height: '400px' }}
+              >
                 <ThreeDView frames={frames} gain={gain} />
-                <OrbitControls enablePan={true} enableZoom={true} />
+                <OrbitControls
+                  enableDamping
+                  dampingFactor={0.05}
+                  rotateSpeed={0.5}
+                  zoomSpeed={0.7}
+                  minDistance={1}
+                  maxDistance={10}
+                />
               </Canvas>
             </div>
           ) : (

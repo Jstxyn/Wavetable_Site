@@ -27,7 +27,6 @@ logging.basicConfig(
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
 
 # Register blueprints
 app.register_blueprint(effects_bp)
@@ -35,7 +34,7 @@ app.register_blueprint(effects_bp)
 # Configure CORS
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:5174"],
+        "origins": ["http://localhost:5173"],  # Frontend Vite dev server port
         "methods": ["GET", "POST", "OPTIONS", "HEAD"],
         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
         "expose_headers": ["Content-Type", "Authorization"],
@@ -49,11 +48,10 @@ CORS(app, resources={
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5174')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
     if 'Origin' in request.headers:
         response.headers['Access-Control-Allow-Origin'] = request.headers['Origin']
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
     return response
 
 def handle_errors(f):
@@ -661,5 +659,6 @@ def image_to_wavetable():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8081))
+    # Use port 8000 by default to avoid conflicts with AirPlay on macOS
+    port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port, debug=True)
