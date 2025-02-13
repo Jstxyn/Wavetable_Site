@@ -6,7 +6,7 @@ import { EffectManager } from '../effects/EffectManager';
 import { EffectControls } from './EffectControls';
 import ThreeDView from './ThreeDView';
 import { API_BASE } from '../config';
-import { VISUAL_SCALE, WAVEFORM_COLOR, DEFAULT_FRAME_COUNT } from '../constants/waveform';
+import { VISUAL_SCALE, WAVEFORM_COLOR, DEFAULT_FRAME_COUNT, LINE_DENSITY_FACTOR, MAX_LINES_3D, LINE_OPACITY, MIN_POINT_DISTANCE, LINE_WIDTH } from '../constants/waveform';
 import './WavetableEditor.css';
 
 // Utility function to bound values between -1 and 1
@@ -143,13 +143,7 @@ const WavetableEditor: React.FC = () => {
 
       const data = await response.json();
       
-      setWaveformData(data);
-      setFrames(data.frames);
-
-      if (canvasRef.current) {
-        const scaledWaveform = data.waveform.map(v => v * gain);
-        drawWaveform(canvasRef.current, scaledWaveform);
-      }
+      handleWaveformLoad(data);
     } catch (err) {
       console.error('Error generating waveform:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate waveform');
@@ -163,59 +157,184 @@ const WavetableEditor: React.FC = () => {
       const response = await fetchWithCredentials(`${API_BASE}/api/waveform/basic?type=${type}&frames=256`);
       const data = await response.json();
       
-      setWaveformData(data);
-      setFrames(data.frames);
-
-      if (canvasRef.current) {
-        const scaledWaveform = data.waveform.map(v => v * gain);
-        drawWaveform(canvasRef.current, scaledWaveform);
-      }
+      handleWaveformLoad(data);
     } catch (err) {
       console.error('Error generating waveform:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate waveform');
     }
   };
 
-  const drawWaveform = useCallback((canvas: HTMLCanvasElement, waveform: number[]) => {
+  // Shared point reduction logic with ThreeDView
+  const reduceFramePoints = (frame: number[], targetPoints: number): number[] => {
+    if (!frame?.length || targetPoints >= frame.length) return frame;
+    
+    const reduced: number[] = [];
+    let lastValue = frame[0];
+    let lastIndex = 0;
+    
+    // Always include the first point
+    reduced.push(frame[0]);
+    
+    // Scan through the frame looking for significant changes
+    for (let i = 1; i < frame.length - 1; i++) {
+      const currentValue = frame[i];
+      const nextValue = frame[i + 1];
+      
+      // Calculate local curvature
+      const prevDiff = Math.abs(currentValue - lastValue);
+      const nextDiff = Math.abs(nextValue - currentValue);
+      const pointDistance = (i - lastIndex) / frame.length;
+      
+      // Keep points where:
+      // 1. There's significant change in value
+      // 2. We haven't kept a point in a while
+      // 3. The curvature is high (turning point)
+      if (
+        prevDiff > MIN_POINT_DISTANCE || 
+        nextDiff > MIN_POINT_DISTANCE ||
+        pointDistance > 1 / targetPoints ||
+        (prevDiff > 0 && nextDiff > 0 && Math.sign(prevDiff) !== Math.sign(nextDiff))
+      ) {
+        reduced.push(currentValue);
+        lastValue = currentValue;
+        lastIndex = i;
+      }
+    }
+    
+    // Always include the last point
+    if (reduced[reduced.length - 1] !== frame[frame.length - 1]) {
+      reduced.push(frame[frame.length - 1]);
+    }
+    
+    return reduced;
+  };
+
+  const drawWaveform = useCallback((canvas: HTMLCanvasElement, waveform: number[], frameData?: number[][]) => {
     const ctx = canvas.getContext('2d');
-    if (!ctx || !waveform.length) {
-      console.warn('Failed to get 2D context or waveform is empty');
+    if (!ctx) {
+      console.warn('Failed to get 2D context');
       return;
     }
 
     try {
-      // Clear the canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Set canvas scale for retina displays
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      
+      ctx.scale(dpr, dpr);
 
-      // Set up drawing style
+      // Clear the canvas with pure black
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      // Set up drawing style to exactly match 3D view
       ctx.strokeStyle = WAVEFORM_COLOR;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = LINE_WIDTH / dpr; // Adjust for retina
+      ctx.globalAlpha = LINE_OPACITY;
+      ctx.lineCap = 'square'; // Match 3D view's sharp lines
+      ctx.lineJoin = 'miter'; // Sharp corners like 3D
+
+      // Enable crisp lines
+      ctx.imageSmoothingEnabled = false;
 
       // Draw the waveform
       ctx.beginPath();
-      const stepX = canvas.width / waveform.length;
-      const centerY = canvas.height / 2;
       
-      // Use the same visual scale as 3D view
+      // If we have frame data, use the first frame for consistency with 3D view
+      const dataToRender = frameData ? frameData[0] : waveform;
+      
+      if (!dataToRender?.length) {
+        console.warn('No waveform data to render');
+        return;
+      }
+
+      // Calculate target points using same logic as 3D view
+      const targetPoints = Math.min(Math.floor(dataToRender.length / LINE_DENSITY_FACTOR), MAX_LINES_3D);
+      
+      // Use the same adaptive point reduction as 3D view
+      const reducedPoints = reduceFramePoints(dataToRender, targetPoints);
+      
+      const centerY = rect.height / 2;
       const scaleY = centerY * VISUAL_SCALE;
 
-      waveform.forEach((value, index) => {
-        const x = index * stepX;
-        const boundedValue = boundValue(value);
-        const y = centerY + boundedValue * scaleY;
+      // Draw line segments matching 3D view exactly
+      for (let i = 0; i < reducedPoints.length - 1; i++) {
+        const x1 = Math.round((i / (reducedPoints.length - 1)) * rect.width);
+        const x2 = Math.round(((i + 1) / (reducedPoints.length - 1)) * rect.width);
         
-        if (index === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      });
+        const y1 = Math.round(centerY + Math.max(-1, Math.min(1, reducedPoints[i] * gain)) * scaleY);
+        const y2 = Math.round(centerY + Math.max(-1, Math.min(1, reducedPoints[i + 1] * gain)) * scaleY);
+        
+        // Draw each line segment separately for perfect sharpness
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
 
-      ctx.stroke();
+      // Log data for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('2D View Data:', {
+          frameData: frameData ? 'Using first frame' : 'Using raw waveform',
+          originalLength: dataToRender.length,
+          reducedLength: reducedPoints.length,
+          lineDensityFactor: LINE_DENSITY_FACTOR,
+          targetPoints,
+          lineWidth: LINE_WIDTH / dpr,
+          dpr,
+          gain
+        });
+      }
     } catch (error) {
       console.error('Error drawing waveform:', error);
     }
+  }, [gain]); // Add gain to dependencies
+
+  const createReducedFrames = useCallback((waveformData: number[]) => {
+    return Array(DEFAULT_FRAME_COUNT).fill(null).map((_, i) => {
+      const frameOffset = (i / DEFAULT_FRAME_COUNT) * Math.PI;
+      // Apply point reduction to each frame
+      const frame = waveformData.map((sample, j) => {
+        const phase = (j / waveformData.length) * 2 * Math.PI;
+        return boundValue(sample * Math.cos(phase + frameOffset));
+      });
+      
+      // Calculate target points using same logic as 3D view
+      const targetPoints = Math.min(Math.floor(frame.length / LINE_DENSITY_FACTOR), MAX_LINES_3D);
+      return reduceFramePoints(frame, targetPoints);
+    });
   }, []);
+
+  const handleWaveformLoad = useCallback((data: WaveformData) => {
+    try {
+      // Store original data for effects processing
+      originalWaveformRef.current = data;
+      
+      // Create reduced frames from the start
+      const reducedFrames = createReducedFrames(data.waveform);
+      
+      setWaveformData({
+        ...data,
+        frames: reducedFrames
+      });
+      setFrames(reducedFrames);
+      
+      // Draw with reduced points from the start
+      if (canvasRef.current) {
+        drawWaveform(canvasRef.current, data.waveform, reducedFrames);
+      }
+      
+      setError('');
+    } catch (error) {
+      console.error('Error loading waveform:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load waveform');
+    }
+  }, [drawWaveform, createReducedFrames]);
 
   const handleEffectChange = async () => {
     if (!waveformData) return;
@@ -223,28 +342,20 @@ const WavetableEditor: React.FC = () => {
     try {
       setIsEffectProcessing(true);
       const processedData = await effectManager.applyEffects(waveformData.waveform);
-
-      // Create frames array from processed data
-      const newFrames = Array(DEFAULT_FRAME_COUNT).fill(null).map((_, i) => {
-        // Create variations of the waveform for each frame
-        const frameOffset = (i / DEFAULT_FRAME_COUNT) * Math.PI;
-        return processedData.map((sample, j) => {
-          const phase = (j / processedData.length) * 2 * Math.PI;
-          return boundValue(sample * Math.cos(phase + frameOffset));
-        });
-      });
+      
+      // Use the same frame creation logic
+      const reducedFrames = createReducedFrames(processedData);
 
       setWaveformData(prev => ({
         ...prev!,
         waveform: processedData,
-        frames: newFrames
+        frames: reducedFrames
       }));
 
-      setFrames(newFrames);
+      setFrames(reducedFrames);
 
       if (canvasRef.current) {
-        const scaledWaveform = processedData.map(v => boundValue(v * gain));
-        drawWaveform(canvasRef.current, scaledWaveform);
+        drawWaveform(canvasRef.current, processedData, reducedFrames);
       }
     } catch (error) {
       console.error('Failed to apply effect:', error);
@@ -343,13 +454,7 @@ const WavetableEditor: React.FC = () => {
         throw new Error(data.error);
       }
       
-      setWaveformData(data);
-      setFrames(data.frames);
-
-      if (canvasRef.current) {
-        const scaledWaveform = data.waveform.map(v => v * gain);
-        drawWaveform(canvasRef.current, scaledWaveform);
-      }
+      handleWaveformLoad(data);
       
       // Store original waveform for effects
       originalWaveformRef.current = {
